@@ -833,7 +833,7 @@ function EnablerForm({ data, onChange, onValidationChange }: EnablerFormProps): 
                   />
                 </th>
                 <th className="text-left p-2 text-sm font-medium text-foreground w-8"></th>
-                <th className="text-left p-2 text-sm font-medium text-foreground w-28">ID</th>
+                <th className="text-left p-2 text-sm font-medium text-foreground w-32">ID</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground w-50">Name</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground">Requirement</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground w-24">Priority</th>
@@ -1061,7 +1061,7 @@ function EnablerForm({ data, onChange, onValidationChange }: EnablerFormProps): 
                   />
                 </th>
                 <th className="text-left p-2 text-sm font-medium text-foreground w-8"></th>
-                <th className="text-left p-2 text-sm font-medium text-foreground w-28">ID</th>
+                <th className="text-left p-2 text-sm font-medium text-foreground w-32">ID</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground w-50">Name</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground w-30">Type</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground">Requirement</th>

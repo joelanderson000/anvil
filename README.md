@@ -1,7 +1,7 @@
 # Anvil
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Version](https://img.shields.io/badge/version-3.5.2-green.svg)]()
+[![Version](https://img.shields.io/badge/version-3.5.3-green.svg)]()
 
 ## Overview
 
@@ -1107,6 +1107,10 @@ Anvil now includes a comprehensive **Claude Code Subagent System** that transfor
 - **REACT + NODE.JS**: Modern full-stack application with React frontend and Node.js Express backend
 
 ## Changelog
+
+### v3.5.3 - UI Enhancement (2025-01-24)
+- **✨ Enhancement**: Increased ID column width in Functional and Non-Functional Requirements tables for better visibility
+- **🎨 UI**: Improved ID field display to prevent character cutoff in requirements editor
 
 ### v3.5.2 - WebSocket Reconnection Fix (2025-11-14)
 - **🔧 Bug Fix**: Fixed WebSocket reconnection defect where file change notifications would stop working after workspace switching
