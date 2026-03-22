@@ -1297,7 +1297,7 @@ function extractComponent(content) {
 // Unified enabler template endpoint 
 app.get('/api/enabler-template/:capabilityId?', async (req, res) => {
   try {
-    const { capabilityId } = req.params;
+    const capabilityId = req.params;
 
     // Generate a unique enabler ID for the template
     const generatedId = await generateEnablerId();
