@@ -26,6 +26,7 @@ import Settings from './components/Settings'
 import Discovery from './components/Discovery'
 import Plan from './components/Plan'
 import ManageWorkspaces from './components/ManageWorkspaces'
+import ProjectNFRManager from './components/ProjectNFRManager'
 
 function App(): JSX.Element {
   return (
@@ -39,6 +40,7 @@ function App(): JSX.Element {
               <Route path="/plan" element={<Plan />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/manage-workspaces" element={<ManageWorkspaces />} />
+              <Route path="/project-nfrs" element={<ProjectNFRManager />} />
               <Route path="/view/:type/*" element={<DocumentView />} />
               <Route path="/edit/:type/*" element={<DocumentEditor />} />
               <Route path="/create/:type" element={<DocumentEditor />} />

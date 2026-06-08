@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../contexts/AppContext'
-import { FileText, Plus, ArrowLeft, ChevronDown, ChevronRight, Settings, Box, Zap, PencilRuler, Ruler, Microscope, GripHorizontal, Filter } from 'lucide-react'
+import { FileText, Plus, ArrowLeft, ChevronDown, ChevronRight, Settings, Box, Zap, PencilRuler, Ruler, Microscope, GripHorizontal, Filter, Lock } from 'lucide-react'
+import { apiService } from '../services/apiService'
 
 interface SidebarExpandedSections {
   capabilities: boolean
@@ -76,6 +77,10 @@ export default function Sidebar(): JSX.Element {
 
   // Enabler filtering toggle state
   const [filterEnablersByCapability, setFilterEnablersByCapability] = useState<boolean>(true)
+
+  // Project NFRs section state
+  const [projectNfrCount, setProjectNfrCount] = useState<number>(0)
+  const [projectNfrsExpanded, setProjectNfrsExpanded] = useState<boolean>(true)
 
   // Resizable sections state
   const [capabilitiesHeight, setCapabilitiesHeight] = useState<number>(50) // Percentage
@@ -175,6 +180,11 @@ export default function Sidebar(): JSX.Element {
   }
 
   const capabilityGroups = useMemo(() => groupCapabilitiesBySystemComponent(capabilities), [capabilities])
+
+  // Load project NFR count, reload on workspace change
+  useEffect(() => {
+    apiService.getProjectNfrs().then(rows => setProjectNfrCount(rows.length)).catch(() => setProjectNfrCount(0))
+  }, [activeWorkspaceId])
 
   // Detect workspace changes and reset expansion states
   useEffect(() => {
@@ -521,10 +531,7 @@ export default function Sidebar(): JSX.Element {
         />
       </div>
 
-      <div
-        className="flex flex-col"
-        style={{ height: `${100 - capabilitiesHeight}%` }}
-      >
+      <div className="flex flex-col flex-1 min-h-0">
         {/* Sticky Enablers Header */}
         <div
           className="flex items-center gap-2 py-3 font-semibold text-xl text-foreground cursor-pointer border-b-2 border-primary mb-3 justify-between uppercase tracking-wide hover:text-foreground/90 bg-card sticky top-0 z-10"
@@ -597,6 +604,37 @@ export default function Sidebar(): JSX.Element {
                 )
               })}
           </div>
+          </div>
+        )}
+      </div>
+      {/* Project NFRs Section */}
+      <div className="flex flex-col min-h-0">
+        <div
+          className="flex items-center gap-2 py-3 font-semibold text-xl text-foreground cursor-pointer border-b-2 border-primary mb-3 justify-between uppercase tracking-wide hover:text-foreground/90 bg-card sticky top-0 z-10"
+          onClick={() => setProjectNfrsExpanded(prev => !prev)}
+        >
+          {projectNfrsExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          <Lock size={14} className="text-muted-foreground" />
+          <span className="flex-1 ml-1">Project NFRs</span>
+          {projectNfrCount > 0 && (
+            <span className="text-xs font-normal bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+              {projectNfrCount}
+            </span>
+          )}
+        </div>
+
+        {projectNfrsExpanded && (
+          <div className="pl-2">
+            <button
+              onClick={() => navigate('/project-nfrs')}
+              className="w-full flex items-center gap-3 py-2 px-3 rounded-md text-sm text-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-150 ease-in-out"
+            >
+              <Lock size={14} className="text-muted-foreground shrink-0" />
+              <span className="flex-1 text-left">
+                {projectNfrCount === 0 ? 'No project NFRs defined' : `${projectNfrCount} requirement${projectNfrCount === 1 ? '' : 's'}`}
+              </span>
+              <span className="text-xs text-muted-foreground">Manage →</span>
+            </button>
           </div>
         )}
       </div>

@@ -402,6 +402,26 @@ export const apiService = {
     }
   },
 
+  async getProjectNfrs(): Promise<any[]> {
+    try {
+      const response = await api.get<any[]>('/project-nfrs')
+      return response.data
+    } catch (error) {
+      console.error('Failed to get project NFRs:', error)
+      return []
+    }
+  },
+
+  async saveProjectNfrs(rows: any[]): Promise<ApiResponse> {
+    try {
+      const response = await api.put<ApiResponse>('/project-nfrs', { rows })
+      return response.data
+    } catch (error) {
+      console.error('Failed to save project NFRs:', error)
+      throw new Error(`Failed to save project NFRs: ${(error as Error).message}`)
+    }
+  },
+
   async openExplorer(filePath: string): Promise<ApiResponse> {
     try {
       const response = await api.post('/open-explorer', { filePath })

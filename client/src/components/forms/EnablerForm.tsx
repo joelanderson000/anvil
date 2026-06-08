@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Plus, Trash2, RefreshCcw, GripVertical, Maximize2, Minimize2, Edit3, ChevronUp, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, RefreshCcw, GripVertical, Maximize2, Minimize2, Edit3, ChevronUp, ChevronDown, Lock } from 'lucide-react'
 import { apiService } from '../../services/apiService'
 import { generateFunctionalRequirementId, generateNonFunctionalRequirementId } from '../../utils/idGenerator'
 import { stateListenerManager } from '../../utils/stateListeners'
@@ -186,6 +186,7 @@ function BulkEditPanel({ onBulkEdit, requirementCount, fieldType, selectedRequir
 function EnablerForm({ data, onChange, onValidationChange }: EnablerFormProps): JSX.Element {
   const [availableCapabilities, setAvailableCapabilities] = useState<CapabilityLink[]>([])
   const [availableEnablers, setAvailableEnablers] = useState<EnablerLink[]>([])
+  const [projectNfrs, setProjectNfrs] = useState<any[]>([])
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
   const [draggedItem, setDraggedItem] = useState<{ type: 'functional' | 'nonFunctional', index: number } | null>(null)
   const [expandedRequirements, setExpandedRequirements] = useState<Set<string>>(new Set())
@@ -197,6 +198,7 @@ function EnablerForm({ data, onChange, onValidationChange }: EnablerFormProps): 
   useEffect(() => {
     loadCapabilities()
     loadEnablers()
+    apiService.getProjectNfrs().then(rows => setProjectNfrs(rows)).catch(() => setProjectNfrs([]))
   }, [])
 
   // Validation effect
@@ -1038,6 +1040,50 @@ function EnablerForm({ data, onChange, onValidationChange }: EnablerFormProps): 
           </button>
         </div>
       </div>
+
+      {/* Project-Level NFRs (read-only) */}
+      {projectNfrs.length > 0 && (
+        <div className="bg-muted/40 rounded-lg border border-border p-6 space-y-3">
+          <div className="flex items-center gap-2">
+            <Lock size={16} className="text-muted-foreground shrink-0" />
+            <h4 className="text-lg font-semibold text-foreground">Project Non-Functional Requirements</h4>
+            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">read-only — managed at project level</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left p-2 text-sm font-medium text-muted-foreground w-36">ID</th>
+                  <th className="text-left p-2 text-sm font-medium text-muted-foreground w-44">Name</th>
+                  <th className="text-left p-2 text-sm font-medium text-muted-foreground w-32">Type</th>
+                  <th className="text-left p-2 text-sm font-medium text-muted-foreground">Requirement</th>
+                  <th className="text-left p-2 text-sm font-medium text-muted-foreground w-28">Priority</th>
+                  <th className="text-left p-2 text-sm font-medium text-muted-foreground w-28">Status</th>
+                  <th className="text-left p-2 text-sm font-medium text-muted-foreground w-28">Approval</th>
+                </tr>
+              </thead>
+              <tbody>
+                {projectNfrs.map((req, idx) => (
+                  <tr key={idx} className="border-b border-border/50 text-muted-foreground">
+                    <td className="p-2 text-sm font-mono">
+                      <span className="flex items-center gap-1">
+                        <Lock size={10} className="shrink-0 opacity-60" />
+                        {req.id}
+                      </span>
+                    </td>
+                    <td className="p-2 text-sm">{req.name}</td>
+                    <td className="p-2 text-sm">{req.type}</td>
+                    <td className="p-2 text-sm">{req.requirement}</td>
+                    <td className="p-2 text-sm">{req.priority}</td>
+                    <td className="p-2 text-sm">{req.status}</td>
+                    <td className="p-2 text-sm">{req.approval}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Non-Functional Requirements */}
       <div className="bg-card rounded-lg border border-border p-6 space-y-4">

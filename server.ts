@@ -822,6 +822,30 @@ function parseRequirementsTable(markdown: string, sectionTitle: string, fields: 
   return requirements;
 }
 
+function serializeProjectNfrs(rows: any[]): string {
+  const tableRows = rows.map(row =>
+    `| ${row.id || ''} | ${row.name || ''} | ${row.requirement || ''} | ${row.type || ''} | ${row.status || ''} | ${row.priority || ''} | ${row.approval || ''} |`
+  ).join('\n');
+  return [
+    '# Project Non-Functional Requirements',
+    '',
+    '## Non-Functional Requirements',
+    '| ID | Name | Requirement | Type | Status | Priority | Approval |',
+    '|----|------|-------------|------|--------|----------|----------|',
+    tableRows,
+    ''
+  ].join('\n');
+}
+
+const PROJECT_NFRS_EMPTY = [
+  '# Project Non-Functional Requirements',
+  '',
+  '## Non-Functional Requirements',
+  '| ID | Name | Requirement | Type | Status | Priority | Approval |',
+  '|----|------|-------------|------|--------|----------|----------|',
+  ''
+].join('\n');
+
 // ID Generation Functions (Server-side)
 // Replicates client-side logic for generating unique IDs
 
@@ -1359,7 +1383,7 @@ app.get('/api/capabilities', async (req, res) => {
     const allItems = await scanProjectPaths(configPaths.projectPaths);
 
     // Filter out non-document files and separate capabilities and enablers
-    const excludedFiles = ['SOFTWARE_DEVELOPMENT_PLAN.md', 'README.md', 'CONTRIBUTING.md', 'LICENSE', 'NOTICE'];
+    const excludedFiles = ['SOFTWARE_DEVELOPMENT_PLAN.md', 'README.md', 'CONTRIBUTING.md', 'LICENSE', 'NOTICE', 'project-nfrs.md'];
     const filteredItems = allItems.filter(item => {
       // Exclude specific files by name
       const fileName = path.basename(item.path || '');
@@ -1391,7 +1415,7 @@ app.get('/api/capabilities-dynamic', async (req, res) => {
     const allItems = await scanProjectPaths(configPaths.projectPaths);
 
     // Filter out non-document files and separate capabilities and enablers
-    const excludedFiles = ['SOFTWARE_DEVELOPMENT_PLAN.md', 'README.md', 'CONTRIBUTING.md', 'LICENSE', 'NOTICE'];
+    const excludedFiles = ['SOFTWARE_DEVELOPMENT_PLAN.md', 'README.md', 'CONTRIBUTING.md', 'LICENSE', 'NOTICE', 'project-nfrs.md'];
     const filteredItems = allItems.filter(item => {
       const fileName = path.basename(item.path || '');
       if (excludedFiles.includes(fileName)) {
@@ -1593,7 +1617,7 @@ app.get('/api/capabilities-with-dependencies', async (req, res) => {
     const allItems = await scanProjectPaths(configPaths.projectPaths);
 
     // Filter out non-document files and separate capabilities and enablers
-    const excludedFiles = ['SOFTWARE_DEVELOPMENT_PLAN.md', 'README.md', 'CONTRIBUTING.md', 'LICENSE', 'NOTICE'];
+    const excludedFiles = ['SOFTWARE_DEVELOPMENT_PLAN.md', 'README.md', 'CONTRIBUTING.md', 'LICENSE', 'NOTICE', 'project-nfrs.md'];
     const filteredItems = allItems.filter(item => {
       // Exclude specific files by name
       const fileName = path.basename(item.path || '');
@@ -3757,6 +3781,21 @@ app.post('/api/workspaces', async (req, res) => {
       }
     }
 
+    // Scaffold project-nfrs.md in each project path if it doesn't exist
+    for (const pathItem of projectPaths) {
+      const pathString = typeof pathItem === 'string' ? pathItem : pathItem.path;
+      const nfrPath = path.join(pathString, 'project-nfrs.md');
+      try {
+        await fs.ensureDir(pathString);
+        if (!(await fs.pathExists(nfrPath))) {
+          await fs.writeFile(nfrPath, PROJECT_NFRS_EMPTY, 'utf8');
+          console.log(`[WORKSPACE] Created project-nfrs.md at ${nfrPath}`);
+        }
+      } catch (error: any) {
+        console.warn(`[WORKSPACE] Failed to create project-nfrs.md at ${nfrPath}:`, error.message);
+      }
+    }
+
     // Validate the entire updated config
     const validationErrors = validateConfig(config);
     if (validationErrors.length > 0) {
@@ -4042,6 +4081,50 @@ app.delete('/api/workspaces/:id/paths', async (req, res) => {
   } catch (error) {
     console.error('[WORKSPACE] Error removing project path:', error);
     res.status(500).json({ error: 'Error removing project path: ' + error.message });
+  }
+});
+
+// Project-level NFR endpoints
+
+app.get('/api/project-nfrs', async (req, res) => {
+  try {
+    const configPaths = getConfigPaths(config);
+    const projectRoot = configPaths.projectPaths[0];
+    const nfrFilePath = path.join(projectRoot, 'project-nfrs.md');
+
+    if (!(await fs.pathExists(nfrFilePath))) {
+      return res.json([]);
+    }
+
+    const content = await fs.readFile(nfrFilePath, 'utf8');
+    const rows = parseNonFunctionalRequirements(content);
+    res.json(rows);
+  } catch (error: any) {
+    console.error('[PROJECT-NFRS] Error reading project-nfrs.md:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/project-nfrs', async (req, res) => {
+  try {
+    const configPaths = getConfigPaths(config);
+    const projectRoot = configPaths.projectPaths[0];
+    const nfrFilePath = path.join(projectRoot, 'project-nfrs.md');
+
+    validateAndResolvePath(nfrFilePath, projectRoot, 'project-nfrs path');
+
+    const { rows } = req.body;
+    if (!Array.isArray(rows)) {
+      return res.status(400).json({ error: 'rows must be an array' });
+    }
+
+    const content = serializeProjectNfrs(rows);
+    await fs.ensureDir(projectRoot);
+    await fs.writeFile(nfrFilePath, content, 'utf8');
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('[PROJECT-NFRS] Error writing project-nfrs.md:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
