@@ -176,6 +176,34 @@ export function generateNonFunctionalRequirementId(existingRequirementIds: strin
   return `NFR-${sequentialNum}`
 }
 
+export function generateFunctionId(existingIds: string[] = []): string {
+  let attempts = 0
+  while (attempts < 100) {
+    const newId = `FUN-${generateSemiUniqueNumber()}`
+    if (!idExists(newId, existingIds)) return newId
+    attempts++
+    const start = Date.now()
+    while (Date.now() - start < 1) { /* wait */ }
+  }
+  let sequentialNum = 100000000
+  while (idExists(`FUN-${sequentialNum}`, existingIds)) sequentialNum++
+  return `FUN-${sequentialNum}`
+}
+
+export function generateComponentId(existingIds: string[] = []): string {
+  let attempts = 0
+  while (attempts < 100) {
+    const newId = `CMP-${generateSemiUniqueNumber()}`
+    if (!idExists(newId, existingIds)) return newId
+    attempts++
+    const start = Date.now()
+    while (Date.now() - start < 1) { /* wait */ }
+  }
+  let sequentialNum = 100000000
+  while (idExists(`CMP-${sequentialNum}`, existingIds)) sequentialNum++
+  return `CMP-${sequentialNum}`
+}
+
 export function generateCustomerRequirementId(existingIds: string[] = []): string {
   let attempts = 0
   while (attempts < 100) {

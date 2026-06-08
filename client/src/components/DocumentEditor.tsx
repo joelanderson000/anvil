@@ -4,8 +4,8 @@ import { apiService } from '../services/apiService'
 import { useApp } from '../contexts/AppContext'
 import { Save, ArrowLeft, Eye, Code } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { parseMarkdownToForm, convertFormToMarkdown, CapabilityFormData, EnablerFormData, CustomerRequirementFormData, SystemRequirementFormData, TestCaseFormData } from '../utils/markdownUtils'
-import { generateCapabilityId, generateEnablerId, generateCustomerRequirementId, generateSystemRequirementId, generateTestCaseId } from '../utils/idGenerator'
+import { parseMarkdownToForm, convertFormToMarkdown, CapabilityFormData, EnablerFormData, FunctionFormData, ComponentFormData, CustomerRequirementFormData, SystemRequirementFormData, TestCaseFormData } from '../utils/markdownUtils'
+import { generateCapabilityId, generateEnablerId, generateFunctionId, generateComponentId, generateCustomerRequirementId, generateSystemRequirementId, generateTestCaseId } from '../utils/idGenerator'
 import { nameToFilename, namesGenerateDifferentFilenames, idToFilename } from '../utils/fileUtils'
 import CapabilityForm from './forms/CapabilityForm'
 import EnablerForm from './forms/EnablerForm'
@@ -102,6 +102,12 @@ export default function DocumentEditor(): JSX.Element {
         } else if (type === 'capability') {
           const response = await fetch('/api/capability-template')
           template = await response.json()
+        } else if (type === 'function') {
+          const response = await fetch('/api/function-template')
+          template = await response.json()
+        } else if (type === 'component') {
+          const response = await fetch(`/api/component-template/${capabilityId || ''}`)
+          template = await response.json()
         } else if (type === 'customer-requirement' || type === 'system-requirement' || type === 'test-case') {
           template = await apiService.getTemplate(type)
         } else {
@@ -116,6 +122,11 @@ export default function DocumentEditor(): JSX.Element {
           capParsed.owner = config?.owner || 'Product Team'
           if (!capParsed.id) capParsed.id = generateId('CAP')
           capParsed.lastSelectedCapabilityPath = config?.lastSelectedCapabilityPath as string
+        } else if (type === 'function') {
+          const funParsed = parsed as FunctionFormData
+          funParsed.owner = config?.owner || 'Product Team'
+          if (!funParsed.id) funParsed.id = generateId('FUN')
+          funParsed.lastSelectedCapabilityPath = config?.lastSelectedCapabilityPath as string
         } else if (type === 'enabler') {
           const enablerParsed = parsed as EnablerFormData
           enablerParsed.owner = config?.owner || 'Product Team'
@@ -140,6 +151,28 @@ export default function DocumentEditor(): JSX.Element {
               capabilityId: capabilityId || enablerData.capabilityId || enablerParsed.capabilityId
             })
           }
+        } else if (type === 'component') {
+          const cmpParsed = parsed as ComponentFormData
+          cmpParsed.owner = config?.owner || 'Product Team'
+          cmpParsed.analysisReview = config?.analysisReview || 'Required'
+          cmpParsed.codeReview = config?.codeReview || 'Not Required'
+          if (!cmpParsed.approval) cmpParsed.approval = 'Not Approved'
+          if (!cmpParsed.id) cmpParsed.id = generateId('CMP')
+          if (capabilityId) cmpParsed.capabilityId = capabilityId
+
+          const locationState = location.state as EnablerLocationState
+          if (locationState?.enablerData) {
+            const enablerData = locationState.enablerData
+            Object.assign(cmpParsed, {
+              id: enablerData.id || cmpParsed.id,
+              name: enablerData.name || '',
+              status: enablerData.status || cmpParsed.status,
+              approval: enablerData.approval || cmpParsed.approval,
+              priority: enablerData.priority || cmpParsed.priority,
+              owner: enablerData.owner || cmpParsed.owner,
+              capabilityId: capabilityId || enablerData.capabilityId || cmpParsed.capabilityId
+            })
+          }
         }
         // For CR/SR/TC the template already has the generated ID embedded
 
@@ -161,7 +194,7 @@ export default function DocumentEditor(): JSX.Element {
       name: '',
       owner: config?.owner || 'Product Team',
       analysisReview: config?.analysisReview || 'Required',
-      codeReview: type === 'enabler' ? (config?.codeReview || 'Not Required') : undefined,
+      codeReview: (type === 'enabler' || type === 'component') ? (config?.codeReview || 'Not Required') : undefined,
       status: 'In Draft',
       approval: 'Not Approved',
       priority: 'High'
@@ -178,6 +211,18 @@ export default function DocumentEditor(): JSX.Element {
         enablers: [],
         lastSelectedCapabilityPath: config?.lastSelectedCapabilityPath
       } as CapabilityFormData
+    } else if (type === 'function') {
+      return {
+        ...base,
+        id: generateId('FUN'),
+        internalUpstream: [],
+        internalDownstream: [],
+        externalUpstream: '',
+        externalDownstream: '',
+        enablers: [],
+        allocatedSystemRequirements: [],
+        lastSelectedCapabilityPath: config?.lastSelectedCapabilityPath
+      } as FunctionFormData
     } else if (type === 'enabler') {
       return {
         ...base,
@@ -186,6 +231,14 @@ export default function DocumentEditor(): JSX.Element {
         functionalRequirements: [],
         nonFunctionalRequirements: []
       } as EnablerFormData
+    } else if (type === 'component') {
+      return {
+        ...base,
+        id: generateId('CMP'),
+        capabilityId: presetCapabilityId || '',
+        functionalRequirements: [],
+        nonFunctionalRequirements: []
+      } as ComponentFormData
     }
 
     return base
@@ -195,9 +248,15 @@ export default function DocumentEditor(): JSX.Element {
     if (prefix === 'CAP') {
       const existingIds = (capabilities || []).map(cap => cap.id).filter(Boolean) as string[]
       return generateCapabilityId(existingIds)
+    } else if (prefix === 'FUN') {
+      const existingIds = (capabilities || []).map(cap => cap.id).filter(Boolean) as string[]
+      return generateFunctionId(existingIds)
     } else if (prefix === 'ENB') {
       const existingIds = (enablers || []).map(enb => enb.id).filter(Boolean) as string[]
       return generateEnablerId(existingIds)
+    } else if (prefix === 'CMP') {
+      const existingIds = (enablers || []).map(enb => enb.id).filter(Boolean) as string[]
+      return generateComponentId(existingIds)
     } else if (prefix === 'CR') {
       const existingIds = (customerRequirements || []).map(cr => cr.id).filter(Boolean) as string[]
       return generateCustomerRequirementId(existingIds)
@@ -218,22 +277,22 @@ export default function DocumentEditor(): JSX.Element {
     try {
       setSaving(true)
 
-      if (type === 'enabler' && editMode === 'form' && !validationState.isValid) {
-        toast.error('Please select a Capability ID before saving')
+      if ((type === 'enabler' || type === 'component') && editMode === 'form' && !validationState.isValid) {
+        toast.error('Please select a Function ID before saving')
         setSaving(false)
         return
       }
 
       const capFormData = formData as CapabilityFormData
-      if (type === 'capability' && isNew && editMode === 'form' && !capFormData.selectedPath) {
-        toast.error('Please select a save path before saving the capability')
+      if ((type === 'capability' || type === 'function') && isNew && editMode === 'form' && !capFormData.selectedPath) {
+        toast.error('Please select a save path before saving')
         setSaving(false)
         return
       }
 
       let isMovingCapability = false
       let originalPath: string | null = null
-      if (type === 'capability' && !isNew && editMode === 'form' && capFormData.selectedPath && path) {
+      if ((type === 'capability' || type === 'function') && !isNew && editMode === 'form' && capFormData.selectedPath && path) {
         const currentDir = path.includes('/') || path.includes('\\')
           ? path.substring(0, path.lastIndexOf('/') || path.lastIndexOf('\\'))
           : ''
@@ -260,7 +319,7 @@ export default function DocumentEditor(): JSX.Element {
         const fd = formData as any
         const filename = fd.id ? idToFilename(fd.id, type) : nameToFilename(fd.name || 'untitled', type)
 
-        if (type === 'capability' && capFormData.selectedPath) {
+        if ((type === 'capability' || type === 'function') && capFormData.selectedPath) {
           savePath = `${capFormData.selectedPath}/${filename}`
         } else {
           savePath = filename
@@ -278,7 +337,7 @@ export default function DocumentEditor(): JSX.Element {
       // Suppress external change notifications before saving
       suppressExternalChangeNotification(savePath!, 5000)
 
-      if (type === 'capability' && editMode === 'form') {
+      if ((type === 'capability' || type === 'function') && editMode === 'form') {
         await apiService.saveCapabilityWithEnablers(
           savePath!,
           contentToSave,
@@ -287,7 +346,7 @@ export default function DocumentEditor(): JSX.Element {
           capFormData.internalDownstream || [],
           capFormData.enablers || []
         )
-      } else if (type === 'enabler' && editMode === 'form') {
+      } else if ((type === 'enabler' || type === 'component') && editMode === 'form') {
         await apiService.saveEnablerWithReparenting(
           savePath!,
           contentToSave,
@@ -308,11 +367,12 @@ export default function DocumentEditor(): JSX.Element {
             for (const enabler of capFormData.enablers) {
               if (enabler.id) {
                 try {
-                  const enablerFilename = idToFilename(enabler.id, 'enabler')
-                  const enablerPath = idToFilename(enabler.id, 'enabler')
+                  const cmpType = enabler.id.startsWith('CMP-') ? 'component' : 'enabler'
+                  const enablerFilename = idToFilename(enabler.id, cmpType)
+                  const enablerPath = idToFilename(enabler.id, cmpType)
                   const newEnablerPath = `${capFormData.selectedPath}/${enablerFilename}`
 
-                  console.log(`[ENABLER-MOVE] Moving enabler ${enabler.id} to ${newEnablerPath}`)
+                  console.log(`[COMPONENT-MOVE] Moving component ${enabler.id} to ${newEnablerPath}`)
                   await apiService.renameFile(enablerPath, newEnablerPath)
                 } catch (enablerError) {
                   console.warn(`[ENABLER-MOVE] Failed to move enabler ${enabler.id}:`, (enablerError as Error).message)
@@ -328,7 +388,7 @@ export default function DocumentEditor(): JSX.Element {
         savePath = newPath
       }
       
-      if (type === 'capability' && isNew && capFormData.selectedPath) {
+      if ((type === 'capability' || type === 'function') && isNew && capFormData.selectedPath) {
         try {
           await apiService.updateConfig({
             lastSelectedCapabilityPath: capFormData.selectedPath
@@ -339,19 +399,19 @@ export default function DocumentEditor(): JSX.Element {
         }
       }
 
-      // Update individual enabler files if this is a capability with enabler changes
-      if (type === 'capability' && capFormData.enablers) {
+      // Update individual component/enabler files if this is a function/capability with component changes
+      if ((type === 'capability' || type === 'function') && capFormData.enablers) {
+        const isFunction = type === 'function'
         for (const enabler of capFormData.enablers) {
           if (enabler.id) {
             try {
-              // Load the existing enabler file (extract number from ID like ENB-738492 -> 738492)
-              const enablerNumber = enabler.id.replace(/^ENB-/i, '')
-              const enablerResponse = await apiService.getFile(`${enablerNumber}-enabler.md`)
+              const isCmp = enabler.id.startsWith('CMP-')
+              const fileType = isCmp ? 'component' : 'enabler'
+              const suffix = isCmp ? '-component.md' : '-enabler.md'
+              const idNum = enabler.id.replace(/^(CMP|ENB)-/i, '')
+              const enablerResponse = await apiService.getFile(`${idNum}${suffix}`)
               if (enablerResponse.content) {
-                // Parse the existing enabler
-                const existingEnablerData = parseMarkdownToForm(enablerResponse.content, 'enabler')
-
-                // Update only the fields that were changed in the capability form
+                const existingEnablerData = parseMarkdownToForm(enablerResponse.content, fileType)
                 const updatedEnablerData = {
                   ...existingEnablerData,
                   name: enabler.name || existingEnablerData.name,
@@ -359,14 +419,11 @@ export default function DocumentEditor(): JSX.Element {
                   approval: enabler.approval || existingEnablerData.approval,
                   priority: enabler.priority || existingEnablerData.priority
                 }
-
-                // Convert back to markdown and save
-                const updatedEnablerMarkdown = convertFormToMarkdown(updatedEnablerData, 'enabler')
-                await apiService.saveFile(`${enablerNumber}-enabler.md`, updatedEnablerMarkdown)
-                console.log(`[ENABLER-UPDATE] Updated enabler ${enabler.id}`)
+                const updatedEnablerMarkdown = convertFormToMarkdown(updatedEnablerData, fileType)
+                await apiService.saveFile(`${idNum}${suffix}`, updatedEnablerMarkdown)
               }
             } catch (enablerError) {
-              console.warn(`[ENABLER-UPDATE] Failed to update enabler ${enabler.id}:`, (enablerError as Error).message)
+              console.warn(`[COMPONENT-UPDATE] Failed to update component ${enabler.id}:`, (enablerError as Error).message)
             }
           }
         }
@@ -376,9 +433,9 @@ export default function DocumentEditor(): JSX.Element {
       
       const filename = savePath!.split('/').pop()!.split('\\').pop()!
 
-      if (type === 'capability' || type === 'enabler') {
+      if (type === 'capability' || type === 'enabler' || type === 'function' || type === 'component') {
         setSelectedDocument({
-          type: type as 'capability' | 'enabler',
+          type: (type === 'function' ? 'capability' : type === 'component' ? 'enabler' : type) as 'capability' | 'enabler',
           path: filename,
           id: (formData as any).name || (formData as any).id || filename
         })
@@ -496,7 +553,7 @@ export default function DocumentEditor(): JSX.Element {
       <div className="max-w-screen-2xl mx-auto p-6">
         {editMode === 'form' ? (
           <div className="bg-card rounded-lg shadow-sm border border-border p-6">
-            {type === 'capability' && (
+            {(type === 'capability' || type === 'function') && (
               <CapabilityForm
                 data={formData as CapabilityFormData}
                 onChange={handleFormDataChange}
@@ -504,7 +561,7 @@ export default function DocumentEditor(): JSX.Element {
                 currentPath={path ? path.substring(0, path.lastIndexOf('/')) : null}
               />
             )}
-            {type === 'enabler' && (
+            {(type === 'enabler' || type === 'component') && (
               <EnablerForm
                 data={formData as EnablerFormData}
                 onChange={handleFormDataChange}

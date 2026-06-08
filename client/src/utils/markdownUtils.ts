@@ -19,6 +19,7 @@ export interface FunctionalRequirement {
   id: string
   name: string
   requirement: string
+  icdReference?: string
   priority: string
   status: string
   approval: string
@@ -29,6 +30,7 @@ export interface NonFunctionalRequirement {
   name: string
   type: string
   requirement: string
+  icdReference?: string
   priority: string
   status: string
   approval: string
@@ -78,6 +80,15 @@ export interface EnablerFormData {
   nonFunctionalRequirements?: NonFunctionalRequirement[]
   technicalSpecifications?: string
   implementationPlan?: string
+}
+
+// SE Phase 2 types: Function (was Capability) and Component (was Enabler)
+export interface FunctionFormData extends CapabilityFormData {
+  allocatedSystemRequirements?: TraceLink[]
+}
+
+export interface ComponentFormData extends EnablerFormData {
+  functionId?: string
 }
 
 export interface TraceLink {
@@ -136,13 +147,16 @@ export interface TestCaseFormData {
   verifiedSRs?: TraceLink[]
 }
 
-export type FormData = CapabilityFormData | EnablerFormData | CustomerRequirementFormData | SystemRequirementFormData | TestCaseFormData
-export type DocumentType = 'capability' | 'enabler' | 'customer-requirement' | 'system-requirement' | 'test-case'
+export type FormData = CapabilityFormData | EnablerFormData | FunctionFormData | ComponentFormData | CustomerRequirementFormData | SystemRequirementFormData | TestCaseFormData
+export type DocumentType = 'capability' | 'enabler' | 'function' | 'component' | 'customer-requirement' | 'system-requirement' | 'test-case'
 
 export function parseMarkdownToForm(markdown: string, type: DocumentType): FormData {
   if (type === 'customer-requirement') return parseCustomerRequirement(markdown)
   if (type === 'system-requirement') return parseSystemRequirement(markdown)
   if (type === 'test-case') return parseTestCase(markdown)
+  // function/component use the same parse logic as capability/enabler but map to FUN/CMP types
+  if (type === 'function') return parseFunctionFromMarkdown(markdown)
+  if (type === 'component') return parseComponentFromMarkdown(markdown)
 
   const lines = markdown.split('\n')
   const result: any = {
@@ -351,6 +365,295 @@ function parseTestCase(markdown: string): TestCaseFormData {
   }
 }
 
+function parseFunctionFromMarkdown(markdown: string): FunctionFormData {
+  const lines = markdown.split('\n')
+  const result: any = {
+    name: '',
+    owner: '',
+    status: DEFAULT_VALUES.STATUS_CAPABILITY,
+    approval: DEFAULT_VALUES.APPROVAL,
+    priority: DEFAULT_VALUES.PRIORITY_CAPABILITY,
+    analysisReview: DEFAULT_VALUES.ANALYSIS_REVIEW,
+    designReview: DEFAULT_VALUES.DESIGN_REVIEW,
+    codeReview: DEFAULT_VALUES.CODE_REVIEW,
+    allocatedSystemRequirements: []
+  }
+
+  const titleMatch = markdown.match(/^#\s+(.+)$/m)
+  if (titleMatch) result.name = titleMatch[1]
+
+  let insideComment = false
+  for (const line of lines) {
+    if (line.trim().startsWith('<!--')) { insideComment = true; continue }
+    if (line.trim().includes('-->')) { insideComment = false; continue }
+    if (insideComment) continue
+    const t = line.trim()
+    const nameMatch = t.match(/^-\s*\*\*Name\*\*:\s*(.+)$/)
+    const ownerMatch = t.match(/^-\s*\*\*Owner\*\*:\s*(.+)$/)
+    const statusMatch = t.match(/^-\s*\*\*Status\*\*:\s*(.+)$/)
+    const approvalMatch = t.match(/^-\s*\*\*Approval\*\*:\s*(.+)$/)
+    const priorityMatch = t.match(/^-\s*\*\*Priority\*\*:\s*(.+)$/)
+    const analysisMatch = t.match(/^-\s*\*\*Analysis Review\*\*:\s*(.+)$/)
+    const codeMatch = t.match(/^-\s*\*\*Code Review\*\*:\s*(.+)$/)
+    const idMatch = t.match(/^-\s*\*\*ID\*\*:\s*(.+)$/)
+    const systemMatch = t.match(/^-\s*\*\*System\*\*:\s*(.+)$/)
+    const componentMatch = t.match(/^-\s*\*\*Component\*\*:\s*(.+)$/)
+    if (nameMatch) result.name = nameMatch[1].trim()
+    if (ownerMatch) result.owner = ownerMatch[1].trim()
+    if (statusMatch) result.status = statusMatch[1].trim()
+    if (approvalMatch) result.approval = approvalMatch[1].trim()
+    if (priorityMatch) result.priority = priorityMatch[1].trim()
+    if (analysisMatch) result.analysisReview = analysisMatch[1].trim()
+    if (codeMatch) result.codeReview = codeMatch[1].trim()
+    if (idMatch) result.id = idMatch[1].trim()
+    if (systemMatch) result.system = systemMatch[1].trim()
+    if (componentMatch) result.component = componentMatch[1].trim()
+  }
+
+  result.technicalOverview = extractTechnicalOverview(markdown)
+  result.purpose = extractPurposeFromTechnicalOverview(markdown)
+  result.internalUpstream = parseTable(markdown, 'Internal Upstream Dependency')
+  result.internalDownstream = parseTable(markdown, 'Internal Downstream Impact')
+  result.externalUpstream = extractExternalDependency(markdown, 'External Upstream Dependencies')
+  result.externalDownstream = extractExternalDependency(markdown, 'External Downstream Impact')
+  result.enablers = parseComponentsTable(markdown)
+  result.technicalSpecifications = extractTechnicalSpecifications(markdown)
+  result.implementationPlan = extractImplementationPlan(markdown)
+  result.allocatedSystemRequirements = parseSimpleTable(markdown, 'Allocated System Requirements')
+
+  return result
+}
+
+function parseComponentFromMarkdown(markdown: string): ComponentFormData {
+  const lines = markdown.split('\n')
+  const result: any = {
+    name: '',
+    owner: '',
+    status: DEFAULT_VALUES.STATUS,
+    approval: DEFAULT_VALUES.APPROVAL,
+    priority: DEFAULT_VALUES.PRIORITY_CAPABILITY,
+    analysisReview: DEFAULT_VALUES.ANALYSIS_REVIEW,
+    designReview: DEFAULT_VALUES.DESIGN_REVIEW,
+    codeReview: DEFAULT_VALUES.CODE_REVIEW
+  }
+
+  const titleMatch = markdown.match(/^#\s+(.+)$/m)
+  if (titleMatch) result.name = titleMatch[1]
+
+  let insideComment = false
+  for (const line of lines) {
+    if (line.trim().startsWith('<!--')) { insideComment = true; continue }
+    if (line.trim().includes('-->')) { insideComment = false; continue }
+    if (insideComment) continue
+    const t = line.trim()
+    const nameMatch = t.match(/^-\s*\*\*Name\*\*:\s*(.+)$/)
+    const ownerMatch = t.match(/^-\s*\*\*Owner\*\*:\s*(.+)$/)
+    const statusMatch = t.match(/^-\s*\*\*Status\*\*:\s*(.+)$/)
+    const approvalMatch = t.match(/^-\s*\*\*Approval\*\*:\s*(.+)$/)
+    const priorityMatch = t.match(/^-\s*\*\*Priority\*\*:\s*(.+)$/)
+    const analysisMatch = t.match(/^-\s*\*\*Analysis Review\*\*:\s*(.+)$/)
+    const codeMatch = t.match(/^-\s*\*\*Code Review\*\*:\s*(.+)$/)
+    const idMatch = t.match(/^-\s*\*\*ID\*\*:\s*(.+)$/)
+    const functionIdMatch = t.match(/^-\s*\*\*(?:Function ID|Capability ID)\*\*:\s*(.+)$/)
+    if (nameMatch) result.name = nameMatch[1].trim()
+    if (ownerMatch) result.owner = ownerMatch[1].trim()
+    if (statusMatch) result.status = statusMatch[1].trim()
+    if (approvalMatch) result.approval = approvalMatch[1].trim()
+    if (priorityMatch) result.priority = priorityMatch[1].trim()
+    if (analysisMatch) result.analysisReview = analysisMatch[1].trim()
+    if (codeMatch) result.codeReview = codeMatch[1].trim()
+    if (idMatch) result.id = idMatch[1].trim()
+    if (functionIdMatch) {
+      result.capabilityId = functionIdMatch[1].trim()
+      result.functionId = functionIdMatch[1].trim()
+    }
+  }
+
+  result.technicalOverview = extractTechnicalOverview(markdown)
+  result.purpose = extractPurposeFromTechnicalOverview(markdown)
+  result.internalUpstream = parseEnablerDependencyTable(markdown, 'Internal Upstream Dependency')
+  result.internalDownstream = parseEnablerDependencyTable(markdown, 'Internal Downstream Impact')
+  result.externalUpstream = extractExternalDependency(markdown, 'External Upstream Dependencies')
+  result.externalDownstream = extractExternalDependency(markdown, 'External Downstream Impact')
+  result.functionalRequirements = parseFunctionalRequirementsWithICD(markdown)
+  result.nonFunctionalRequirements = parseNonFunctionalRequirementsWithICD(markdown)
+  result.technicalSpecifications = extractTechnicalSpecifications(markdown)
+  result.implementationPlan = extractImplementationPlan(markdown)
+
+  return result
+}
+
+function parseComponentsTable(markdown: string): Enabler[] {
+  // Try "## Components" first, fall back to "## Enablers"
+  const modifiedMarkdown = markdown.replace('## Components', '## Enablers')
+  return parseEnablersTable(modifiedMarkdown)
+}
+
+function parseFunctionalRequirementsWithICD(markdown: string): FunctionalRequirement[] {
+  return parseRequirementsTable(markdown, 'Functional Requirements', ['id', 'name', 'requirement', 'icdReference', 'priority', 'status', 'approval']) as FunctionalRequirement[]
+}
+
+function parseNonFunctionalRequirementsWithICD(markdown: string): NonFunctionalRequirement[] {
+  return parseRequirementsTable(markdown, 'Non-Functional Requirements', ['id', 'name', 'type', 'requirement', 'icdReference', 'priority', 'status', 'approval']) as NonFunctionalRequirement[]
+}
+
+function convertFunctionToMarkdown(formData: FunctionFormData): string {
+  // Reuse capability serialization, replacing section headings
+  const tempData = { ...formData, enablers: formData.enablers || [] }
+  let markdown = convertCapabilityToMarkdown(tempData as CapabilityFormData)
+
+  markdown = markdown.replace('- **Type**: Capability\n', '- **Type**: Function\n')
+  markdown = markdown.replace('## Enablers\n', '## Components\n')
+  markdown = markdown.replace('| Enabler ID |\n|------------|\n', '| Component ID |\n|--------------|\n')
+
+  // Append Allocated System Requirements table if present
+  if (formData.allocatedSystemRequirements && formData.allocatedSystemRequirements.length > 0) {
+    markdown += `\n## Allocated System Requirements\n| SR ID | Description |\n|-------|-------------|\n`
+    formData.allocatedSystemRequirements.forEach(r => {
+      markdown += `| ${r.id} | ${r.description} |\n`
+    })
+  } else {
+    markdown += `\n## Allocated System Requirements\n| SR ID | Description |\n|-------|-------------|\n| | |\n`
+  }
+
+  return markdown
+}
+
+function convertCapabilityToMarkdown(formData: CapabilityFormData): string {
+  const capEnbData = formData
+  let markdown = `# ${capEnbData.name}\n\n## Metadata\n\n`
+  markdown += `- **Name**: ${capEnbData.name}\n`
+  markdown += `- **Type**: Capability\n`
+  if (capEnbData.system) markdown += `- **System**: ${capEnbData.system}\n`
+  if (capEnbData.component) markdown += `- **Component**: ${capEnbData.component}\n`
+  if (capEnbData.id) markdown += `- **ID**: ${capEnbData.id}\n`
+  markdown += `- **Approval**: ${capEnbData.approval}\n`
+  markdown += `- **Owner**: ${capEnbData.owner}\n`
+  markdown += `- **Status**: ${capEnbData.status}\n`
+  markdown += `- **Priority**: ${capEnbData.priority}\n`
+  markdown += `- **Analysis Review**: ${capEnbData.analysisReview || 'Required'}\n\n`
+
+  if (capEnbData.purpose) {
+    markdown += `## Technical Overview\n### Purpose\n${capEnbData.purpose}\n\n`
+  } else if (capEnbData.technicalOverview) {
+    markdown += capEnbData.technicalOverview + '\n\n'
+  } else {
+    markdown += `## Technical Overview\n### Purpose\n[What is the purpose?]\n\n`
+  }
+
+  markdown += `## Enablers\n\n| Enabler ID |\n|------------|\n`
+  if (capEnbData.enablers && capEnbData.enablers.length > 0) {
+    capEnbData.enablers.forEach(e => { markdown += `| ${e.id || ''} |\n` })
+  } else {
+    markdown += `| |\n`
+  }
+  markdown += `\n## Dependencies\n\n### Internal Upstream Dependency\n\n`
+  if (capEnbData.internalUpstream && capEnbData.internalUpstream.length > 0) {
+    markdown += createDependencyTable(capEnbData.internalUpstream) + `\n`
+  } else {
+    markdown += `| Capability ID | Description |\n|---------------|-------------|\n| | |\n\n`
+  }
+  markdown += `### Internal Downstream Impact\n\n`
+  if (capEnbData.internalDownstream && capEnbData.internalDownstream.length > 0) {
+    markdown += createDependencyTable(capEnbData.internalDownstream) + `\n`
+  } else {
+    markdown += `| Capability ID | Description |\n|---------------|-------------|\n| | |\n\n`
+  }
+  markdown += `### External Dependencies\n\n`
+  markdown += `**External Upstream Dependencies**: ${capEnbData.externalUpstream || 'None identified.'}\n\n`
+  markdown += `**External Downstream Impact**: ${capEnbData.externalDownstream || 'None identified.'}\n\n`
+
+  if (capEnbData.technicalSpecifications && capEnbData.technicalSpecifications.trim().length > 0) {
+    markdown += capEnbData.technicalSpecifications.trim() + `\n\n`
+  } else {
+    markdown += generateCapabilityTechnicalSpecificationsTemplate()
+  }
+
+  if (capEnbData.implementationPlan) {
+    markdown += formatImplementationPlan(capEnbData.implementationPlan)
+  }
+
+  return markdown
+}
+
+function convertComponentToMarkdown(formData: ComponentFormData): string {
+  const d = formData as ComponentFormData & EnablerFormData
+  const capEnbData = d
+  let markdown = `# ${capEnbData.name}\n\n## Metadata\n\n`
+  markdown += `- **Name**: ${capEnbData.name}\n`
+  markdown += `- **Type**: Component\n`
+  if (capEnbData.id) markdown += `- **ID**: ${capEnbData.id}\n`
+  markdown += `- **Approval**: ${capEnbData.approval}\n`
+  // Write Function ID (or fall back to capabilityId for compat)
+  const functionId = d.functionId || d.capabilityId
+  if (functionId) markdown += `- **Function ID**: ${functionId}\n`
+  markdown += `- **Owner**: ${capEnbData.owner}\n`
+  markdown += `- **Status**: ${capEnbData.status}\n`
+  markdown += `- **Priority**: ${capEnbData.priority}\n`
+  markdown += `- **Analysis Review**: ${capEnbData.analysisReview || 'Required'}\n`
+  markdown += `- **Code Review**: ${capEnbData.codeReview || 'Not Required'}\n\n`
+
+  if (capEnbData.purpose) {
+    markdown += `## Technical Overview\n### Purpose\n${capEnbData.purpose}\n\n`
+  } else if (capEnbData.technicalOverview) {
+    markdown += capEnbData.technicalOverview + '\n\n'
+  } else {
+    markdown += `## Technical Overview\n### Purpose\n[What is the purpose?]\n\n`
+  }
+
+  // Functional Requirements with ICD Reference
+  markdown += `## Functional Requirements\n\n`
+  markdown += `| ID | Name | Requirement | ICD Reference | Priority | Status | Approval |\n`
+  markdown += `|----|------|-------------|---------------|----------|--------|----------|\n`
+  if (capEnbData.functionalRequirements && capEnbData.functionalRequirements.length > 0) {
+    capEnbData.functionalRequirements.forEach(req => {
+      markdown += `| ${req.id || ''} | ${req.name || ''} | ${(req.requirement || '').replace(/\n/g, '<br>')} | ${(req as any).icdReference || ''} | ${req.priority || PRIORITY_VALUES.REQUIREMENT.MUST_HAVE} | ${req.status || STATUS_VALUES.REQUIREMENT.IN_DRAFT} | ${req.approval || APPROVAL_VALUES.NOT_APPROVED} |\n`
+    })
+  } else {
+    markdown += `| | | | | | | |\n`
+  }
+  markdown += `\n`
+
+  // Non-Functional Requirements with ICD Reference
+  markdown += `## Non-Functional Requirements\n\n`
+  markdown += `| ID | Name | Type | Requirement | ICD Reference | Priority | Status | Approval |\n`
+  markdown += `|----|------|------|-------------|---------------|----------|--------|----------|\n`
+  if (capEnbData.nonFunctionalRequirements && capEnbData.nonFunctionalRequirements.length > 0) {
+    capEnbData.nonFunctionalRequirements.forEach(req => {
+      markdown += `| ${req.id || ''} | ${req.name || ''} | ${req.type || ''} | ${(req.requirement || '').replace(/\n/g, '<br>')} | ${(req as any).icdReference || ''} | ${req.priority || PRIORITY_VALUES.REQUIREMENT.MUST_HAVE} | ${req.status || STATUS_VALUES.REQUIREMENT.IN_DRAFT} | ${req.approval || APPROVAL_VALUES.NOT_APPROVED} |\n`
+    })
+  } else {
+    markdown += `| | | | | | | | |\n`
+  }
+  markdown += `\n## Dependencies\n\n### Internal Upstream Dependency\n\n`
+  if (capEnbData.internalUpstream && capEnbData.internalUpstream.length > 0) {
+    markdown += createEnablerDependencyTable(capEnbData.internalUpstream) + `\n`
+  } else {
+    markdown += `| Component ID | Description |\n|--------------|-------------|\n| | |\n\n`
+  }
+  markdown += `### Internal Downstream Impact\n\n`
+  if (capEnbData.internalDownstream && capEnbData.internalDownstream.length > 0) {
+    markdown += createEnablerDependencyTable(capEnbData.internalDownstream) + `\n`
+  } else {
+    markdown += `| Component ID | Description |\n|--------------|-------------|\n| | |\n\n`
+  }
+  markdown += `### External Dependencies\n\n`
+  markdown += `**External Upstream Dependencies**: ${capEnbData.externalUpstream || 'None identified.'}\n\n`
+  markdown += `**External Downstream Impact**: ${capEnbData.externalDownstream || 'None identified.'}\n\n`
+
+  if (capEnbData.technicalSpecifications && capEnbData.technicalSpecifications.trim().length > 0) {
+    markdown += capEnbData.technicalSpecifications.trim() + `\n\n`
+  } else {
+    markdown += generateEnablerTechnicalSpecificationsTemplate()
+  }
+
+  if (capEnbData.implementationPlan) {
+    markdown += formatImplementationPlan(capEnbData.implementationPlan)
+  }
+
+  return markdown
+}
+
 function convertCRToMarkdown(d: CustomerRequirementFormData): string {
   let md = `# ${d.name}\n\n## Metadata\n`
   md += `- **Name**: ${d.name}\n`
@@ -432,6 +735,8 @@ export function convertFormToMarkdown(formData: FormData, type: DocumentType): s
   if (type === 'customer-requirement') return convertCRToMarkdown(formData as CustomerRequirementFormData)
   if (type === 'system-requirement') return convertSRToMarkdown(formData as SystemRequirementFormData)
   if (type === 'test-case') return convertTCToMarkdown(formData as TestCaseFormData)
+  if (type === 'function') return convertFunctionToMarkdown(formData as FunctionFormData)
+  if (type === 'component') return convertComponentToMarkdown(formData as ComponentFormData)
 
   const capEnbData = formData as CapabilityFormData & EnablerFormData
   let markdown = `# ${capEnbData.name}\n\n`

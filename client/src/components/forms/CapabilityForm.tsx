@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react'
 import { Plus, Trash2, FileText, RefreshCcw, GripVertical, Edit3 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../../contexts/AppContext'
-import { generateEnablerId } from '../../utils/idGenerator'
+import { generateComponentId } from '../../utils/idGenerator'
 import { stateListenerManager } from '../../utils/stateListeners'
 import { STATUS_VALUES, APPROVAL_VALUES, PRIORITY_VALUES, REVIEW_VALUES } from '../../utils/constants'
 import { apiService } from '../../services/apiService'
@@ -231,21 +231,14 @@ function CapabilityForm({ data, onChange, isNew = false, currentPath = null }: C
   }, [data, onChange, capabilities, enablers])
   
   const generateNextEnablerId = () => {
-    // Collect ALL enabler IDs from across the project (from app context)
     const allProjectEnablerIds = (enablers || [])
       .map(enabler => enabler.id)
-      .filter(id => id && id.startsWith('ENB-'))
-    
-    // Also check enablers in current capability being edited (in case they haven't been saved yet)
+      .filter(id => id && (id.startsWith('CMP-') || id.startsWith('ENB-')))
     const currentCapabilityIds = (data.enablers || [])
       .map(enabler => enabler.id)
-      .filter(id => id && id.startsWith('ENB-'))
-    
-    // Combine all existing IDs
+      .filter(id => id && (id.startsWith('CMP-') || id.startsWith('ENB-')))
     const allExistingIds = [...allProjectEnablerIds, ...currentCapabilityIds]
-    
-    // Use the new ID generation utility
-    return generateEnablerId(allExistingIds)
+    return generateComponentId(allExistingIds)
   }
 
   const removeArrayItem = useCallback((field, index) => {
@@ -269,17 +262,17 @@ function CapabilityForm({ data, onChange, isNew = false, currentPath = null }: C
 
   const handleCreateEnablerDocument = useCallback((enabler, index) => {
     if (!enabler.id || !enabler.name) {
-      toast.error('Enabler must have an ID and name before creating document')
+      toast.error('Component must have an ID and name before creating document')
       return
     }
 
     if (!data.id) {
-      toast.error('Please save the capability first before creating enabler documents')
+      toast.error('Please save the function first before creating component documents')
       return
     }
 
     // Navigate to create enabler with capability context
-    navigate(`/create/enabler/for/${data.id}`, {
+    navigate(`/create/component/for/${data.id}`, {
       state: {
         enablerData: enabler,
         capabilityId: data.id,
@@ -799,7 +792,7 @@ function CapabilityForm({ data, onChange, isNew = false, currentPath = null }: C
                   />
                 </th>
                 <th className="text-left p-2 text-sm font-medium text-foreground w-8"></th>
-                <th className="text-left p-2 text-sm font-medium text-foreground">Enabler ID</th>
+                <th className="text-left p-2 text-sm font-medium text-foreground">Component ID</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground">Name</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground">Status</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground">Approval</th>
@@ -843,7 +836,7 @@ function CapabilityForm({ data, onChange, isNew = false, currentPath = null }: C
                       className="w-full px-2 py-1 bg-background border border-border rounded text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                       value={enabler.id || ''}
                       onChange={(e) => handleArrayChange('enablers', index, 'id', e.target.value)}
-                      placeholder="ENB-1000"
+                      placeholder="CMP-1000"
                     />
                   </td>
                   <td className="p-2">
@@ -852,7 +845,7 @@ function CapabilityForm({ data, onChange, isNew = false, currentPath = null }: C
                       className="w-full px-2 py-1 bg-background border border-border rounded text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                       value={enabler.name || ''}
                       onChange={(e) => handleArrayChange('enablers', index, 'name', e.target.value)}
-                      placeholder="Enabler name"
+                      placeholder="Component name"
                     />
                   </td>
                   <td className="p-2">
@@ -935,7 +928,7 @@ function CapabilityForm({ data, onChange, isNew = false, currentPath = null }: C
             className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
           >
             <Plus size={14} />
-            Add Enabler
+            Add Component
           </button>
           <button
             type="button"

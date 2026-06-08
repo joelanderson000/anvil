@@ -144,12 +144,12 @@ export default function Sidebar(): JSX.Element {
 
   const handleCreateCapability = (): void => {
     setSelectedDocument(null)
-    navigate('/create/capability')
+    navigate('/create/function')
   }
 
   const handleCreateEnabler = (): void => {
     setSelectedDocument(null)
-    navigate('/create/enabler')
+    navigate('/create/component')
   }
 
   const handleBackClick = (): void => {
@@ -303,7 +303,7 @@ export default function Sidebar(): JSX.Element {
             <div className="mb-6">
               <h5 className="text-md font-medium text-foreground mb-3 flex items-center gap-2">
                 <Box size={16} />
-                Capabilities ({searchResults.capabilities.length})
+                Functions ({searchResults.capabilities.length})
               </h5>
               <div className="ml-4 border-l-2 border-primary/20 pl-2 space-y-1">
                 {searchResults.capabilities.map((capability) => {
@@ -342,7 +342,7 @@ export default function Sidebar(): JSX.Element {
             <div className="mb-6">
               <h5 className="text-md font-medium text-foreground mb-3 flex items-center gap-2">
                 <Zap size={16} />
-                Enablers ({searchResults.enablers.length})
+                Components ({searchResults.enablers.length})
               </h5>
               <div className="ml-4 border-l-2 border-primary/20 pl-2 space-y-1">
                 {searchResults.enablers.map((enabler) => {
@@ -510,14 +510,14 @@ export default function Sidebar(): JSX.Element {
           onClick={(): void => toggleSection('capabilities')}
         >
           {expandedSections.capabilities ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          <span className="flex-1 ml-2">Capabilities</span>
+          <span className="flex-1 ml-2">Functions</span>
           <button
             onClick={(e: React.MouseEvent<HTMLButtonElement>): void => {
               e.stopPropagation()
               handleCreateCapability()
             }}
             className="flex items-center justify-center w-8 h-8 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors duration-200 shadow-sm border border-primary/20"
-            title="Create New Capability"
+            title="Create New Function"
           >
             <Plus size={18} strokeWidth={2.5} />
           </button>
@@ -620,7 +620,7 @@ export default function Sidebar(): JSX.Element {
           onClick={(): void => toggleSection('enablers')}
         >
           {expandedSections.enablers ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          <span className="flex-1 ml-2">Enablers</span>
+          <span className="flex-1 ml-2">Components</span>
           <button
             onClick={(e: React.MouseEvent<HTMLButtonElement>): void => {
               e.stopPropagation()
@@ -631,7 +631,7 @@ export default function Sidebar(): JSX.Element {
                 ? 'bg-primary text-primary-foreground border-primary/20 hover:bg-primary/90'
                 : 'bg-secondary text-secondary-foreground border-secondary/20 hover:bg-secondary/90'
             }`}
-            title={filterEnablersByCapability ? "Show All Enablers" : "Filter by Selected Capability"}
+            title={filterEnablersByCapability ? "Show All Components" : "Filter by Selected Function"}
           >
             <Filter size={16} strokeWidth={2.5} />
           </button>
@@ -641,7 +641,7 @@ export default function Sidebar(): JSX.Element {
               handleCreateEnabler()
             }}
             className="flex items-center justify-center w-8 h-8 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors duration-200 shadow-sm border border-primary/20"
-            title="Create New Enabler"
+            title="Create New Component"
           >
             <Plus size={18} strokeWidth={2.5} />
           </button>

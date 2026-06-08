@@ -676,7 +676,7 @@ function EnablerForm({ data, onChange, onValidationChange }: EnablerFormProps): 
               className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
               value={data.name || ''}
               onChange={(e) => handleBasicChange('name', e.target.value)}
-              placeholder="Enabler name"
+              placeholder="Component name"
             />
           </div>
 
@@ -685,7 +685,7 @@ function EnablerForm({ data, onChange, onValidationChange }: EnablerFormProps): 
             <input
               type="text"
               className="w-full px-3 py-2 bg-muted border border-border rounded-md text-muted-foreground cursor-not-allowed"
-              value="Enabler"
+              value="Component"
               readOnly
             />
           </div>
@@ -697,17 +697,17 @@ function EnablerForm({ data, onChange, onValidationChange }: EnablerFormProps): 
               className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
               value={data.id || ''}
               onChange={(e) => handleBasicChange('id', e.target.value)}
-              placeholder="ENB-1000"
+              placeholder="CMP-1000"
             />
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-foreground">Capability ID</label>
+            <label className="block text-sm font-medium text-foreground">Function ID</label>
             <SearchableSelect
               value={data.capabilityId || ''}
               onChange={(value) => handleBasicChange('capabilityId', value)}
               options={capabilityOptions}
-              placeholder="Select a capability..."
+              placeholder="Select a function..."
               className="px-3 py-2 focus:ring-2 focus:ring-ring focus:border-transparent"
             />
             {validationErrors.capabilityId && (
@@ -838,6 +838,7 @@ function EnablerForm({ data, onChange, onValidationChange }: EnablerFormProps): 
                 <th className="text-left p-2 text-sm font-medium text-foreground w-32">ID</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground w-50">Name</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground">Requirement</th>
+                <th className="text-left p-2 text-sm font-medium text-foreground w-28">ICD Reference</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground w-24">Priority</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground w-24">Status</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground w-20">Approval</th>
@@ -943,6 +944,15 @@ function EnablerForm({ data, onChange, onValidationChange }: EnablerFormProps): 
                         target.style.height = 'auto'
                         target.style.height = `${Math.max(target.scrollHeight, expandedRequirements.has(`functional_${index}`) ? 128 : 60)}px`
                       }}
+                    />
+                  </td>
+                  <td className="p-2">
+                    <input
+                      type="text"
+                      className="w-full px-2 py-1 bg-background border border-border rounded text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                      value={(req as any).icdReference || ''}
+                      onChange={(e) => handleArrayChange('functionalRequirements', index, 'icdReference', e.target.value)}
+                      placeholder="ICD-001 §3.2"
                     />
                   </td>
                   <td className="p-2">
@@ -1111,6 +1121,7 @@ function EnablerForm({ data, onChange, onValidationChange }: EnablerFormProps): 
                 <th className="text-left p-2 text-sm font-medium text-foreground w-50">Name</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground w-30">Type</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground">Requirement</th>
+                <th className="text-left p-2 text-sm font-medium text-foreground w-28">ICD Reference</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground w-24">Priority</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground w-24">Status</th>
                 <th className="text-left p-2 text-sm font-medium text-foreground w-20">Approval</th>
@@ -1231,6 +1242,15 @@ function EnablerForm({ data, onChange, onValidationChange }: EnablerFormProps): 
                     />
                   </td>
                   <td className="p-2">
+                    <input
+                      type="text"
+                      className="w-full px-2 py-1 bg-background border border-border rounded text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                      value={(req as any).icdReference || ''}
+                      onChange={(e) => handleArrayChange('nonFunctionalRequirements', index, 'icdReference', e.target.value)}
+                      placeholder="ICD-001 §3.2"
+                    />
+                  </td>
+                  <td className="p-2">
                     <select
                       className="w-full px-2 py-1 bg-background border border-border rounded text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                       value={req.priority || PRIORITY_VALUES.REQUIREMENT.MUST_HAVE}
@@ -1331,8 +1351,8 @@ function EnablerForm({ data, onChange, onValidationChange }: EnablerFormProps): 
         <h4 className="text-lg font-semibold text-foreground">Dependencies</h4>
         <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
           <div className="text-sm text-blue-800">
-            <p className="mb-1"><strong>Upstream Enablers:</strong> Deliver inputs, services, or data required by this enabler.</p>
-            <p><strong>Downstream Enablers:</strong> Consume outputs or services produced by this enabler.</p>
+            <p className="mb-1"><strong>Upstream Components:</strong> Deliver inputs, services, or data required by this component.</p>
+            <p><strong>Downstream Components:</strong> Consume outputs or services produced by this component.</p>
           </div>
         </div>
 

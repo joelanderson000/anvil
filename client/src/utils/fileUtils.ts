@@ -16,7 +16,7 @@
 
 // Utility functions for file operations
 
-export type DocumentType = 'capability' | 'enabler'
+export type DocumentType = 'capability' | 'enabler' | 'function' | 'component'
 
 /**
  * Converts a document ID to a filename (preferred method for uniqueness)
@@ -27,17 +27,13 @@ export type DocumentType = 'capability' | 'enabler'
 export function idToFilename(id: string, type: DocumentType): string {
   if (!id) return ''
 
-  // Remove prefix from ID (CAP- or ENB-) to get just the number
-  const numericId = id.replace(/^(CAP|ENB)-/i, '')
+  const numericId = id.replace(/^(CAP|ENB|FUN|CMP)-/i, '')
 
-  // Add type suffix for clarity
-  if (type === 'capability') {
-    return `${numericId}-capability.md`
-  } else if (type === 'enabler') {
-    return `${numericId}-enabler.md`
-  }
+  if (type === 'capability') return `${numericId}-capability.md`
+  if (type === 'function') return `${numericId}-function.md`
+  if (type === 'enabler') return `${numericId}-enabler.md`
+  if (type === 'component') return `${numericId}-component.md`
 
-  // Fallback for unknown types
   return `${numericId}.md`
 }
 
@@ -73,15 +69,13 @@ export function filenameToName(filename: string): string {
   const nameWithoutExtension = filename.replace(/\.md$/, '')
 
   // Check if it's an ID-based filename (starts with CAP- or ENB-)
-  if (nameWithoutExtension.match(/^(CAP|ENB)-/i)) {
-    // For ID-based filenames, remove type suffix if present and return the ID as-is (uppercase)
-    const idWithoutSuffix = nameWithoutExtension.replace(/-capability$|-enabler$/, '')
+  if (nameWithoutExtension.match(/^(CAP|ENB|FUN|CMP)-/i)) {
+    const idWithoutSuffix = nameWithoutExtension.replace(/-capability$|-enabler$|-function$|-component$/, '')
     return idWithoutSuffix.toUpperCase()
   }
 
-  // For legacy name-based filenames, remove type suffix and format
   return nameWithoutExtension
-    .replace(/-capability$|-enabler$/, '')
+    .replace(/-capability$|-enabler$|-function$|-component$/, '')
     .replace(/-/g, ' ')
     .replace(/\b\w/g, l => l.toUpperCase()) // Capitalize first letter of each word
 }

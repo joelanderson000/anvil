@@ -370,10 +370,10 @@ async function scanDirectory(dirPath: string, baseUrl: string = ''): Promise<Doc
         itemType = 'system-requirement'
       } else if (file.includes('-test-case.md')) {
         itemType = 'test-case'
-      } else if (file.includes('-capability.md')) {
-        itemType = 'capability'
-      } else if (file.includes('-enabler.md')) {
-        itemType = 'enabler'
+      } else if (file.includes('-function.md')) {
+        itemType = 'function'
+      } else if (file.includes('-component.md')) {
+        itemType = 'component'
       } else if (type) {
         itemType = type
       }
@@ -487,9 +487,11 @@ async function enhanceDependencyTablesWithNames(html) {
       }
 
       const files = await fs.readdir(resolvedPath);
-      const capabilityFiles = files.filter(file => file.endsWith('-capability.md'));
+      const functionFiles = files.filter(file =>
+        file.endsWith('-function.md') || file.endsWith('-capability.md')
+      );
 
-      for (const file of capabilityFiles) {
+      for (const file of functionFiles) {
         try {
           const filePath = path.join(resolvedPath, file);
           const content = await fs.readFile(filePath, 'utf8');
@@ -500,15 +502,15 @@ async function enhanceDependencyTablesWithNames(html) {
             capabilityMap.set(id, name);
           }
         } catch (error) {
-          console.warn(`Could not process capability file ${file}:`, error.message);
+          console.warn(`Could not process function file ${file}:`, error.message);
         }
       }
     }
 
-    // Create a map of enabler ID to name for quick lookup
+    // Create a map of component ID to name for quick lookup
     const enablerMap = new Map();
 
-    // Read all enabler files from all project paths to build the map
+    // Read all component files from all project paths to build the map
     for (const projectPath of configPaths.projectPaths) {
       const resolvedPath = path.resolve(projectPath);
       if (!await fs.pathExists(resolvedPath)) {
@@ -516,9 +518,11 @@ async function enhanceDependencyTablesWithNames(html) {
       }
 
       const files = await fs.readdir(resolvedPath);
-      const enablerFiles = files.filter(file => file.endsWith('-enabler.md'));
+      const componentFiles = files.filter(file =>
+        file.endsWith('-component.md') || file.endsWith('-enabler.md')
+      );
 
-      for (const file of enablerFiles) {
+      for (const file of componentFiles) {
         try {
           const filePath = path.join(resolvedPath, file);
           const content = await fs.readFile(filePath, 'utf8');
@@ -529,45 +533,41 @@ async function enhanceDependencyTablesWithNames(html) {
             enablerMap.set(id, name);
           }
         } catch (error) {
-          console.warn(`Could not process enabler file ${file}:`, error.message);
+          console.warn(`Could not process component file ${file}:`, error.message);
         }
       }
     }
 
-    // Enhanced regex to find dependency table rows with capability IDs
+    // Enhanced regex to find dependency table rows with IDs
     const dependencyTableRegex = /<tr>\s*<td>([A-Z]+-\d+)<\/td>\s*<td>([^<]*)<\/td>\s*<\/tr>/g;
 
-    // Replace each table row with enhanced version that includes capability name
-    let enhancedHtml = html.replace(dependencyTableRegex, (match, capabilityId, description) => {
-      const capabilityName = capabilityMap.get(capabilityId);
+    let enhancedHtml = html.replace(dependencyTableRegex, (match, docId, description) => {
+      const docName = capabilityMap.get(docId);
 
-      if (capabilityName) {
-        // Add the name after the ID in the same cell
+      if (docName) {
         return match.replace(
-          `<td>${capabilityId}</td>`,
-          `<td><strong>${capabilityId}</strong><br/><span style="font-size: 0.9em; opacity: 0.8;">${capabilityName}</span></td>`
+          `<td>${docId}</td>`,
+          `<td><strong>${docId}</strong><br/><span style="font-size: 0.9em; opacity: 0.8;">${docName}</span></td>`
         );
       }
 
-      return match; // Return unchanged if no name found
+      return match;
     });
 
-    // Enhanced regex to find dependency table rows with enabler IDs
-    const enablerTableRegex = /<tr>\s*<td>(ENB-\d+)<\/td>\s*<td>([^<]*)<\/td>\s*<\/tr>/g;
+    // Enhanced regex to find component/enabler IDs
+    const enablerTableRegex = /<tr>\s*<td>((?:CMP|ENB)-\d+)<\/td>\s*<td>([^<]*)<\/td>\s*<\/tr>/g;
 
-    // Replace each table row with enhanced version that includes enabler name
-    enhancedHtml = enhancedHtml.replace(enablerTableRegex, (match, enablerId, description) => {
-      const enablerName = enablerMap.get(enablerId);
+    enhancedHtml = enhancedHtml.replace(enablerTableRegex, (match, componentId, description) => {
+      const componentName = enablerMap.get(componentId);
 
-      if (enablerName) {
-        // Add the name after the ID in the same cell, similar to capability format
+      if (componentName) {
         return match.replace(
-          `<td>${enablerId}</td>`,
-          `<td><strong>${enablerId}</strong><br/><span style="font-size: 0.9em; opacity: 0.8;">${enablerName}</span></td>`
+          `<td>${componentId}</td>`,
+          `<td><strong>${componentId}</strong><br/><span style="font-size: 0.9em; opacity: 0.8;">${componentName}</span></td>`
         );
       }
 
-      return match; // Return unchanged if no name found
+      return match;
     });
     
     return enhancedHtml;
@@ -595,7 +595,9 @@ async function enhanceEnablerTablesWithDynamicData(html) {
       }
 
       const files = await fs.readdir(resolvedPath);
-      const enablerFiles = files.filter(file => file.endsWith('-enabler.md'));
+      const enablerFiles = files.filter(file =>
+        file.endsWith('-component.md') || file.endsWith('-enabler.md')
+      );
 
       for (const file of enablerFiles) {
         try {
@@ -612,17 +614,6 @@ async function enhanceEnablerTablesWithDynamicData(html) {
               priority: metadata.priority || 'Unknown'
             };
 
-            // Debug logging for ENB-138959 specifically
-            if (metadata.id === 'ENB-138959') {
-              logger.debug('🔍 Loading ENB-138959 enabler metadata', {
-                file: filePath,
-                extractedPriority: metadata.priority,
-                extractedStatus: metadata.status,
-                extractedApproval: metadata.approval,
-                finalEntry: enablerEntry
-              });
-            }
-
             enablerMap.set(metadata.id, enablerEntry);
           }
         } catch (err) {
@@ -631,51 +622,43 @@ async function enhanceEnablerTablesWithDynamicData(html) {
       }
     }
 
-    // Find and enhance enabler tables in the HTML
-    // Look for tables with "Enabler ID" header
+    // Find and enhance component/enabler tables in the HTML
+    // Look for tables with "Component ID" or "Enabler ID" header
     let enhancedHtml = html.replace(
       /<table[\s\S]*?<\/table>/g,
       (tableMatch) => {
-        // Check if this table has "Enabler ID" in the header
-        if (tableMatch.includes('Enabler ID')) {
-          // Transform the table to include dynamic data
+        const hasComponentHeader = tableMatch.includes('Component ID') || tableMatch.includes('Enabler ID');
+        if (hasComponentHeader) {
           return tableMatch.replace(
             /<tr[^>]*>[\s\S]*?<\/tr>/g,
-            (rowMatch, index) => {
-              // Skip the header row and separator row
-              if (rowMatch.includes('Enabler ID') || rowMatch.includes('---')) {
+            (rowMatch) => {
+              if (rowMatch.includes('Component ID') || rowMatch.includes('Enabler ID') || rowMatch.includes('---')) {
                 return rowMatch;
               }
 
-              // Extract enabler ID from the row
-              const enablerIdMatch = rowMatch.match(/<td[^>]*>(ENB-\d+)<\/td>/);
-              if (enablerIdMatch) {
-                const enablerId = enablerIdMatch[1];
-                const enablerData = enablerMap.get(enablerId);
+              const componentIdMatch = rowMatch.match(/<td[^>]*>((?:CMP|ENB)-\d+)<\/td>/);
+              if (componentIdMatch) {
+                const componentId = componentIdMatch[1];
+                const componentData = enablerMap.get(componentId);
 
-                if (enablerData) {
-                  // Check if this is single column (1), old 2-column format (2), or legacy 6-column format
+                if (componentData) {
                   const cellCount = (rowMatch.match(/<td[^>]*>/g) || []).length;
 
                   if (cellCount === 1) {
-                    // Single column format: Only ID
                     return `<tr>
-                      <td>${enablerData.id}</td>
-                      <td>${enablerData.name}</td>
-                      <td><span class="status-${enablerData.status.toLowerCase().replace(/\s+/g, '-')}">${enablerData.status}</span></td>
-                      <td><span class="approval-${enablerData.approval.toLowerCase().replace(/\s+/g, '-')}">${enablerData.approval}</span></td>
-                      <td><span class="priority-${enablerData.priority.toLowerCase()}">${enablerData.priority}</span></td>
+                      <td>${componentData.id}</td>
+                      <td>${componentData.name}</td>
+                      <td><span class="status-${componentData.status.toLowerCase().replace(/\s+/g, '-')}">${componentData.status}</span></td>
+                      <td><span class="approval-${componentData.approval.toLowerCase().replace(/\s+/g, '-')}">${componentData.approval}</span></td>
+                      <td><span class="priority-${componentData.priority.toLowerCase()}">${componentData.priority}</span></td>
                     </tr>`;
                   } else if (cellCount === 2) {
-                    // Two column format: ID and Description (likely dependency tables)
-                    // Leave dependency tables alone - they're handled by enhanceDependencyTablesWithNames
                     return rowMatch;
                   }
                 } else {
-                  // Enabler not found - show warning
                   return rowMatch.replace(
-                    /<td[^>]*>(ENB-\d+)<\/td>/,
-                    `<td><strong style="color: #d32f2f;">${enablerId} (Not Found)</strong></td>`
+                    /<td[^>]*>((?:CMP|ENB)-\d+)<\/td>/,
+                    `<td><strong style="color: #d32f2f;">${componentId} (Not Found)</strong></td>`
                   );
                 }
               }
@@ -688,11 +671,11 @@ async function enhanceEnablerTablesWithDynamicData(html) {
       }
     );
 
-    // Update table header only for single column tables (not dependency tables)
+    // Update table header for component/enabler single-column tables
     enhancedHtml = enhancedHtml.replace(
-      /<tr[^>]*>\s*<th[^>]*>Enabler ID<\/th>\s*<\/tr>/,
+      /<tr[^>]*>\s*<th[^>]*>(?:Component ID|Enabler ID)<\/th>\s*<\/tr>/,
       `<tr>
-        <th>Enabler ID</th>
+        <th>Component ID</th>
         <th>Name</th>
         <th>Status</th>
         <th>Approval</th>
@@ -713,9 +696,9 @@ function extractType(content) {
   return match ? match[1].toLowerCase() : null;
 }
 
-// Extract capability ID from enabler metadata
+// Extract function/capability ID from component metadata
 function extractCapabilityId(content) {
-  const match = content.match(/^-\s*\*\*Capability ID\*\*:\s*(CAP-\d+)/m);
+  const match = content.match(/^-\s*\*\*(?:Function ID|Capability ID)\*\*:\s*([A-Z]+-\d+)/m);
   return match ? match[1].trim() : null;
 }
 
@@ -767,8 +750,8 @@ function extractMetadata(content: string): DocumentMetadata {
     capabilityId: extractCapabilityId(content)
   };
 
-  // Add requirements for enablers
-  if (type === 'enabler') {
+  // Add requirements for component and enabler types
+  if (type === 'component' || type === 'enabler') {
     metadata.functionalRequirements = parseFunctionalRequirements(content);
     metadata.nonFunctionalRequirements = parseNonFunctionalRequirements(content);
   }
@@ -894,6 +877,48 @@ async function scanExistingIds(prefix) {
     console.error(`[ID-SCAN] Error scanning existing ${prefix} IDs:`, error);
     return [];
   }
+}
+
+/**
+ * Generates a unique function ID (replaces capability)
+ * @returns {Promise<string>} New function ID in format FUN-123456789
+ */
+async function generateFunctionId() {
+  const existingIds = await scanExistingIds('FUN-');
+  let attempts = 0;
+  const maxAttempts = 100;
+  while (attempts < maxAttempts) {
+    const newNumber = generateSemiUniqueNumber();
+    const newId = `FUN-${newNumber}`;
+    if (!existingIds.includes(newId)) return newId;
+    attempts++;
+    const start = Date.now();
+    while (Date.now() - start < 1) { /* wait */ }
+  }
+  let sequentialNum = 100000000;
+  while (existingIds.includes(`FUN-${sequentialNum}`)) sequentialNum++;
+  return `FUN-${sequentialNum}`;
+}
+
+/**
+ * Generates a unique component ID (replaces enabler)
+ * @returns {Promise<string>} New component ID in format CMP-123456789
+ */
+async function generateComponentId() {
+  const existingIds = await scanExistingIds('CMP-');
+  let attempts = 0;
+  const maxAttempts = 100;
+  while (attempts < maxAttempts) {
+    const newNumber = generateSemiUniqueNumber();
+    const newId = `CMP-${newNumber}`;
+    if (!existingIds.includes(newId)) return newId;
+    attempts++;
+    const start = Date.now();
+    while (Date.now() - start < 1) { /* wait */ }
+  }
+  let sequentialNum = 100000000;
+  while (existingIds.includes(`CMP-${sequentialNum}`)) sequentialNum++;
+  return `CMP-${sequentialNum}`;
 }
 
 /**
@@ -1451,6 +1476,50 @@ app.get('/api/capability-template', async (req, res) => {
   }
 });
 
+// Function template endpoint (replaces capability-template for new workflow)
+app.get('/api/function-template', async (req, res) => {
+  try {
+    const generatedId = await generateFunctionId();
+    const placeholderFunction = {
+      name: '[Function Name]',
+      id: generatedId,
+      status: 'In Draft',
+      approval: 'Not Approved',
+      priority: 'High',
+      description: '[What does this function enable the system to do?]'
+    };
+    const templateContent = await generateCapabilityContentFromTemplate(placeholderFunction);
+    res.json({ content: templateContent });
+  } catch (error) {
+    console.error('[FUNCTION-TEMPLATE-API] Error serving template:', error);
+    res.status(500).json({ error: 'Error loading function template: ' + error.message });
+  }
+});
+
+// Component template endpoint (replaces enabler-template for new workflow)
+app.get('/api/component-template/:functionId?', async (req, res) => {
+  try {
+    const functionId = req.params.functionId;
+    const generatedId = await generateComponentId();
+    const placeholderComponent = {
+      name: '[Component Name]',
+      id: generatedId,
+      status: 'In Draft',
+      approval: 'Not Approved',
+      priority: 'High',
+      description: '[What is the purpose?]'
+    };
+    const templateContent = await generateEnablerContentFromTemplate(
+      placeholderComponent,
+      functionId || 'FUN-XXXXXX (Parent Function)'
+    );
+    res.json({ content: templateContent });
+  } catch (error) {
+    console.error('[COMPONENT-TEMPLATE-API] Error serving template:', error);
+    res.status(500).json({ error: 'Error loading component template: ' + error.message });
+  }
+});
+
 // Generic template endpoint for new SE document types
 app.get('/api/template/:type', async (req, res) => {
   const { type } = req.params;
@@ -1458,7 +1527,16 @@ app.get('/api/template/:type', async (req, res) => {
     let id: string;
     let content: string;
 
-    if (type === 'customer-requirement') {
+    if (type === 'function') {
+      id = await generateFunctionId();
+      // Delegate to function template generator
+      const placeholderFunction = { name: '[Function Name]', id, status: 'In Draft', approval: 'Not Approved', priority: 'High', description: '[What does this function enable the system to do?]' };
+      content = await generateCapabilityContentFromTemplate(placeholderFunction);
+    } else if (type === 'component') {
+      id = await generateComponentId();
+      const placeholderComponent = { name: '[Component Name]', id, status: 'In Draft', approval: 'Not Approved', priority: 'High', description: '[What is the purpose?]' };
+      content = await generateEnablerContentFromTemplate(placeholderComponent, 'FUN-XXXXXX (Parent Function)');
+    } else if (type === 'customer-requirement') {
       id = await generateCustomerRequirementId();
       content = `# [Customer Requirement Name]
 
@@ -1667,12 +1745,13 @@ app.get('/api/capabilities-dynamic', async (req, res) => {
       if (excludedFiles.includes(fileName)) {
         return false;
       }
-      return item.type === 'capability' || item.type === 'enabler' ||
+      return item.type === 'function' || item.type === 'component' ||
+             item.type === 'capability' || item.type === 'enabler' ||
              item.type === 'customer-requirement' || item.type === 'system-requirement' || item.type === 'test-case';
     });
 
-    const capabilities = filteredItems.filter(item => item.type === 'capability');
-    const enablers = filteredItems.filter(item => item.type === 'enabler');
+    const capabilities = filteredItems.filter(item => item.type === 'function' || item.type === 'capability');
+    const enablers = filteredItems.filter(item => item.type === 'component' || item.type === 'enabler');
     const customerRequirements = filteredItems.filter(item => item.type === 'customer-requirement');
     const systemRequirements = filteredItems.filter(item => item.type === 'system-requirement');
     const testCases = filteredItems.filter(item => item.type === 'test-case');
@@ -1777,10 +1856,13 @@ app.get('/api/capabilities-dynamic', async (req, res) => {
   }
 });
 
-// Helper function to extract enabler IDs from capability content
+// Helper function to extract component/enabler IDs from function/capability content
 function extractEnablerIds(content: string): { id: string; description: string }[] {
   const lines = content.split('\n');
-  const enablerSectionIndex = lines.findIndex(line => line.includes('## Enablers'));
+  // Support both new (Components) and old (Enablers) section headings
+  const enablerSectionIndex = lines.findIndex(line =>
+    line.includes('## Components') || line.includes('## Enablers')
+  );
 
   if (enablerSectionIndex === -1) {
     return [];
@@ -1808,8 +1890,8 @@ function extractEnablerIds(content: string): { id: string; description: string }
         const enablerIdCol = columns[0] || '';
         const descriptionCol = columns[2] || '';
 
-        // Extract ENB-XXXXXX pattern
-        const enablerIdMatch = enablerIdCol.match(/ENB-\d+/);
+        // Extract CMP- or ENB- pattern
+        const enablerIdMatch = enablerIdCol.match(/(?:CMP|ENB)-\d+/);
         if (enablerIdMatch) {
           enablerIds.push({
             id: enablerIdMatch[0],
