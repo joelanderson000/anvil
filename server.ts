@@ -364,7 +364,13 @@ async function scanDirectory(dirPath: string, baseUrl: string = ''): Promise<Doc
 
       // Determine type based on filename or explicit type field
       let itemType = 'document'
-      if (file.includes('-capability.md')) {
+      if (file.includes('-customer-requirement.md')) {
+        itemType = 'customer-requirement'
+      } else if (file.includes('-system-requirement.md')) {
+        itemType = 'system-requirement'
+      } else if (file.includes('-test-case.md')) {
+        itemType = 'test-case'
+      } else if (file.includes('-capability.md')) {
         itemType = 'capability'
       } else if (file.includes('-enabler.md')) {
         itemType = 'enabler'
@@ -1019,6 +1025,75 @@ async function generateNonFunctionalRequirementId() {
 }
 
 /**
+ * Generates a unique Customer Requirement ID
+ * @returns {Promise<string>} New CR ID in format CR-123456789
+ */
+async function generateCustomerRequirementId() {
+  const existingIds = await scanExistingIds('CR-');
+  let attempts = 0;
+  const maxAttempts = 100;
+
+  while (attempts < maxAttempts) {
+    const newNumber = generateSemiUniqueNumber();
+    const newId = `CR-${newNumber}`;
+    if (!existingIds.includes(newId)) return newId;
+    attempts++;
+    const start = Date.now();
+    while (Date.now() - start < 1) { /* wait */ }
+  }
+
+  let sequentialNum = 100000000;
+  while (existingIds.includes(`CR-${sequentialNum}`)) sequentialNum++;
+  return `CR-${sequentialNum}`;
+}
+
+/**
+ * Generates a unique System Requirement ID
+ * @returns {Promise<string>} New SR ID in format SR-123456789
+ */
+async function generateSystemRequirementId() {
+  const existingIds = await scanExistingIds('SR-');
+  let attempts = 0;
+  const maxAttempts = 100;
+
+  while (attempts < maxAttempts) {
+    const newNumber = generateSemiUniqueNumber();
+    const newId = `SR-${newNumber}`;
+    if (!existingIds.includes(newId)) return newId;
+    attempts++;
+    const start = Date.now();
+    while (Date.now() - start < 1) { /* wait */ }
+  }
+
+  let sequentialNum = 100000000;
+  while (existingIds.includes(`SR-${sequentialNum}`)) sequentialNum++;
+  return `SR-${sequentialNum}`;
+}
+
+/**
+ * Generates a unique Test Case ID
+ * @returns {Promise<string>} New TC ID in format TC-123456789
+ */
+async function generateTestCaseId() {
+  const existingIds = await scanExistingIds('TC-');
+  let attempts = 0;
+  const maxAttempts = 100;
+
+  while (attempts < maxAttempts) {
+    const newNumber = generateSemiUniqueNumber();
+    const newId = `TC-${newNumber}`;
+    if (!existingIds.includes(newId)) return newId;
+    attempts++;
+    const start = Date.now();
+    while (Date.now() - start < 1) { /* wait */ }
+  }
+
+  let sequentialNum = 100000000;
+  while (existingIds.includes(`TC-${sequentialNum}`)) sequentialNum++;
+  return `TC-${sequentialNum}`;
+}
+
+/**
  * Copy a capability document with all its enablers
  */
 async function copyCapability(originalContent, originalPath, configPaths, originalDirectory = null) {
@@ -1376,6 +1451,177 @@ app.get('/api/capability-template', async (req, res) => {
   }
 });
 
+// Generic template endpoint for new SE document types
+app.get('/api/template/:type', async (req, res) => {
+  const { type } = req.params;
+  try {
+    let id: string;
+    let content: string;
+
+    if (type === 'customer-requirement') {
+      id = await generateCustomerRequirementId();
+      content = `# [Customer Requirement Name]
+
+## Metadata
+- **Name**: [Requirement Name]
+- **Type**: Customer Requirement
+- **ID**: ${id}
+- **Source**: [Stakeholder / Organisation]
+- **Owner**: Product Team
+- **Status**: In Draft
+- **Approval**: Not Approved
+- **Priority**: High
+
+## Statement
+[One clear sentence: "The system shall [capability] so that [stakeholder benefit]."]
+
+## Rationale
+[Operational context. Why does this need exist?]
+
+## Acceptance Criteria
+[How will the stakeholder know this need is satisfied?]
+
+## Derived System Requirements
+| SR ID | Description |
+|-------|-------------|
+| | |
+`;
+    } else if (type === 'system-requirement') {
+      id = await generateSystemRequirementId();
+      content = `# [System Requirement Name]
+
+## Metadata
+- **Name**: [Requirement Name]
+- **Type**: System Requirement
+- **ID**: ${id}
+- **Customer Requirement ID**: CR-XXXXXXXXX
+- **Owner**: Product Team
+- **Status**: In Draft
+- **Approval**: Not Approved
+- **Priority**: High
+- **Verification Method**: Test
+
+## Statement
+[Precise, measurable: "The system shall [action] [condition] [measurable criterion]."]
+
+## Rationale
+[Why this requirement is technically necessary to satisfy the parent CR.]
+
+## Verification Criteria
+[How this requirement will be objectively verified.]
+
+## Parent Customer Requirements
+| CR ID | Description |
+|-------|-------------|
+| | |
+
+## Allocated Functions
+| FUN ID | Description |
+|--------|-------------|
+| | |
+
+## Verification Test Cases
+| TC ID | Description | Status |
+|-------|-------------|--------|
+| | | |
+`;
+    } else if (type === 'test-case') {
+      id = await generateTestCaseId();
+      content = `# [Test Case Name]
+
+## Metadata
+- **Name**: [Test Case Name]
+- **Type**: Test Case
+- **ID**: ${id}
+- **System Requirement ID**: SR-XXXXXXXXX
+- **Owner**: Product Team
+- **Status**: In Draft
+- **Approval**: Not Approved
+- **Verification Method**: Test
+- **Pass/Fail Status**: Not Executed
+
+## Objective
+[One sentence: what SR criterion this test demonstrates.]
+
+## Prerequisites
+- Environment: [test environment, tools, or system state required]
+- Dependencies: [other tests that must pass first, data setup, etc.]
+
+## Test Procedure
+| Step | Action | Expected Result |
+|------|--------|-----------------|
+| 1 | | |
+
+## Actual Result
+[Filled in during execution. Leave blank until test is run.]
+
+## Pass / Fail Determination
+[The specific condition that constitutes a Pass vs. Fail outcome.]
+
+## Verified System Requirements
+| SR ID | Description |
+|-------|-------------|
+| | |
+`;
+    } else {
+      return res.status(400).json({ error: `Unknown document type: ${type}` });
+    }
+
+    res.json({ content });
+  } catch (error) {
+    console.error(`[TEMPLATE-API] Error serving template for type ${type}:`, error);
+    res.status(500).json({ error: `Error generating template: ${error.message}` });
+  }
+});
+
+// Update test case Pass/Fail Status and Actual Result
+app.patch('/api/test-cases/:id/result', async (req, res) => {
+  const { id } = req.params;
+  const { passFail, actualResult } = req.body;
+
+  if (!passFail && !actualResult) {
+    return res.status(400).json({ error: 'Must provide passFail or actualResult' });
+  }
+
+  const validPassFail = ['Not Executed', 'Pass', 'Fail', 'Blocked'];
+  if (passFail && !validPassFail.includes(passFail)) {
+    return res.status(400).json({ error: `passFail must be one of: ${validPassFail.join(', ')}` });
+  }
+
+  try {
+    const configPaths = getConfigPaths(config);
+    const allItems = await scanProjectPaths(configPaths.projectPaths);
+    const testCase = allItems.find(item => item.type === 'test-case' && item.id === id);
+
+    if (!testCase) {
+      return res.status(404).json({ error: `Test case ${id} not found` });
+    }
+
+    const fullPath = testCase.fullPath;
+    let content = await fs.readFile(fullPath, 'utf8');
+
+    if (passFail) {
+      content = content.replace(
+        /^-\s*\*\*Pass\/Fail Status\*\*:\s*.+$/m,
+        `- **Pass/Fail Status**: ${passFail}`
+      );
+    }
+
+    if (actualResult !== undefined) {
+      content = content.replace(
+        /^## Actual Result\n[\s\S]*?(?=\n##|\n$|$)/m,
+        `## Actual Result\n${actualResult}\n`
+      );
+    }
+
+    await fs.writeFile(fullPath, content, 'utf8');
+    res.json({ success: true, id, passFail, actualResult });
+  } catch (error) {
+    console.error(`[TEST-CASE-RESULT] Error updating test case ${id}:`, error);
+    res.status(500).json({ error: `Failed to update test case: ${error.message}` });
+  }
+});
+
 app.get('/api/capabilities', async (req, res) => {
   logger.info('API call: /api/capabilities', { timestamp: new Date().toISOString(), userAgent: req.get('User-Agent') });
   try {
@@ -1421,11 +1667,15 @@ app.get('/api/capabilities-dynamic', async (req, res) => {
       if (excludedFiles.includes(fileName)) {
         return false;
       }
-      return item.type === 'capability' || item.type === 'enabler';
+      return item.type === 'capability' || item.type === 'enabler' ||
+             item.type === 'customer-requirement' || item.type === 'system-requirement' || item.type === 'test-case';
     });
 
     const capabilities = filteredItems.filter(item => item.type === 'capability');
     const enablers = filteredItems.filter(item => item.type === 'enabler');
+    const customerRequirements = filteredItems.filter(item => item.type === 'customer-requirement');
+    const systemRequirements = filteredItems.filter(item => item.type === 'system-requirement');
+    const testCases = filteredItems.filter(item => item.type === 'test-case');
 
     // Create enabler lookup map for fast access, grouped by project path
     const enablerMap = new Map();
@@ -1517,7 +1767,10 @@ app.get('/api/capabilities-dynamic', async (req, res) => {
 
     res.json({
       capabilities: enhancedCapabilities,
-      enablers
+      enablers,
+      customerRequirements,
+      systemRequirements,
+      testCases
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

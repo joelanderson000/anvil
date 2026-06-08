@@ -4,11 +4,14 @@ import { apiService } from '../services/apiService'
 import { useApp } from '../contexts/AppContext'
 import { Save, ArrowLeft, Eye, Code } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { parseMarkdownToForm, convertFormToMarkdown, CapabilityFormData, EnablerFormData } from '../utils/markdownUtils'
-import { generateCapabilityId, generateEnablerId } from '../utils/idGenerator'
+import { parseMarkdownToForm, convertFormToMarkdown, CapabilityFormData, EnablerFormData, CustomerRequirementFormData, SystemRequirementFormData, TestCaseFormData } from '../utils/markdownUtils'
+import { generateCapabilityId, generateEnablerId, generateCustomerRequirementId, generateSystemRequirementId, generateTestCaseId } from '../utils/idGenerator'
 import { nameToFilename, namesGenerateDifferentFilenames, idToFilename } from '../utils/fileUtils'
 import CapabilityForm from './forms/CapabilityForm'
 import EnablerForm from './forms/EnablerForm'
+import { CustomerRequirementForm } from './forms/CustomerRequirementForm'
+import { SystemRequirementForm } from './forms/SystemRequirementForm'
+import { TestCaseForm } from './forms/TestCaseForm'
 
 interface DocumentParams {
   type: string
@@ -41,7 +44,7 @@ export default function DocumentEditor(): JSX.Element {
   const { type, '*': path, capabilityId } = params
   const navigate: NavigateFunction = useNavigate()
   const location: Location = useLocation()
-  const { refreshData, config, capabilities, enablers, setSelectedDocument, suppressExternalChangeNotification } = useApp()
+  const { refreshData, config, capabilities, enablers, customerRequirements, systemRequirements, testCases, setSelectedDocument, suppressExternalChangeNotification } = useApp()
   
   const [document, setDocument] = useState<FileData | null>(null)
   const [formData, setFormData] = useState<FormData>({})
@@ -92,43 +95,35 @@ export default function DocumentEditor(): JSX.Element {
       
       try {
         let template: TemplateData
-        
+
         if (type === 'enabler') {
           const response = await fetch(`/api/enabler-template/${capabilityId || ''}`)
           template = await response.json()
         } else if (type === 'capability') {
           const response = await fetch('/api/capability-template')
           template = await response.json()
+        } else if (type === 'customer-requirement' || type === 'system-requirement' || type === 'test-case') {
+          template = await apiService.getTemplate(type)
         } else {
           throw new Error('Unsupported document type')
         }
-        
+
         setMarkdownContent(template.content)
         const parsed = parseMarkdownToForm(template.content, type)
-        
-        parsed.owner = config?.owner || 'Product Team'
-        if (type === 'enabler') {
-          const enablerParsed = parsed as EnablerFormData
-          enablerParsed.analysisReview = config?.analysisReview || 'Required'
-          enablerParsed.codeReview = config?.codeReview || 'Not Required'
-          if (!enablerParsed.approval) {
-            enablerParsed.approval = 'Not Approved'
-          }
-        }
+
         if (type === 'capability') {
           const capParsed = parsed as CapabilityFormData
-          if (!capParsed.id) {
-            capParsed.id = generateId('CAP')
-          }
+          capParsed.owner = config?.owner || 'Product Team'
+          if (!capParsed.id) capParsed.id = generateId('CAP')
           capParsed.lastSelectedCapabilityPath = config?.lastSelectedCapabilityPath as string
         } else if (type === 'enabler') {
           const enablerParsed = parsed as EnablerFormData
-          if (!enablerParsed.id) {
-            enablerParsed.id = generateId('ENB')
-          }
-          if (capabilityId) {
-            enablerParsed.capabilityId = capabilityId
-          }
+          enablerParsed.owner = config?.owner || 'Product Team'
+          enablerParsed.analysisReview = config?.analysisReview || 'Required'
+          enablerParsed.codeReview = config?.codeReview || 'Not Required'
+          if (!enablerParsed.approval) enablerParsed.approval = 'Not Approved'
+          if (!enablerParsed.id) enablerParsed.id = generateId('ENB')
+          if (capabilityId) enablerParsed.capabilityId = capabilityId
 
           const locationState = location.state as EnablerLocationState
           if (locationState?.enablerData) {
@@ -146,6 +141,7 @@ export default function DocumentEditor(): JSX.Element {
             })
           }
         }
+        // For CR/SR/TC the template already has the generated ID embedded
 
         setFormData(parsed)
       } catch (templateErr) {
@@ -197,13 +193,22 @@ export default function DocumentEditor(): JSX.Element {
 
   const generateId = (prefix: string): string => {
     if (prefix === 'CAP') {
-      const existingCapabilityIds = (capabilities || []).map(cap => cap.id).filter(Boolean) as string[]
-      return generateCapabilityId(existingCapabilityIds)
+      const existingIds = (capabilities || []).map(cap => cap.id).filter(Boolean) as string[]
+      return generateCapabilityId(existingIds)
     } else if (prefix === 'ENB') {
-      const existingEnablerIds = (enablers || []).map(enb => enb.id).filter(Boolean) as string[]
-      return generateEnablerId(existingEnablerIds)
+      const existingIds = (enablers || []).map(enb => enb.id).filter(Boolean) as string[]
+      return generateEnablerId(existingIds)
+    } else if (prefix === 'CR') {
+      const existingIds = (customerRequirements || []).map(cr => cr.id).filter(Boolean) as string[]
+      return generateCustomerRequirementId(existingIds)
+    } else if (prefix === 'SR') {
+      const existingIds = (systemRequirements || []).map(sr => sr.id).filter(Boolean) as string[]
+      return generateSystemRequirementId(existingIds)
+    } else if (prefix === 'TC') {
+      const existingIds = (testCases || []).map(tc => tc.id).filter(Boolean) as string[]
+      return generateTestCaseId(existingIds)
     }
-    
+
     const timestamp = Date.now().toString().slice(-2)
     const random = Math.floor(Math.random() * 100).toString().padStart(2, '0')
     return `${prefix}-${timestamp}${random}`
@@ -252,7 +257,8 @@ export default function DocumentEditor(): JSX.Element {
       let newPath: string | null = null
 
       if (isNew) {
-        const filename = formData.id ? idToFilename(formData.id, type) : nameToFilename(formData.name || 'untitled', type)
+        const fd = formData as any
+        const filename = fd.id ? idToFilename(fd.id, type) : nameToFilename(fd.name || 'untitled', type)
 
         if (type === 'capability' && capFormData.selectedPath) {
           savePath = `${capFormData.selectedPath}/${filename}`
@@ -370,11 +376,13 @@ export default function DocumentEditor(): JSX.Element {
       
       const filename = savePath!.split('/').pop()!.split('\\').pop()!
 
-      setSelectedDocument({
-        type: type as 'capability' | 'enabler',
-        path: filename,
-        id: formData.name || formData.id || filename
-      })
+      if (type === 'capability' || type === 'enabler') {
+        setSelectedDocument({
+          type: type as 'capability' | 'enabler',
+          path: filename,
+          id: (formData as any).name || (formData as any).id || filename
+        })
+      }
 
       navigate(`/view/${type}/${filename}`)
       
@@ -499,6 +507,27 @@ export default function DocumentEditor(): JSX.Element {
             {type === 'enabler' && (
               <EnablerForm
                 data={formData as EnablerFormData}
+                onChange={handleFormDataChange}
+                onValidationChange={handleValidationChange}
+              />
+            )}
+            {type === 'customer-requirement' && (
+              <CustomerRequirementForm
+                data={formData as CustomerRequirementFormData}
+                onChange={handleFormDataChange}
+                onValidationChange={handleValidationChange}
+              />
+            )}
+            {type === 'system-requirement' && (
+              <SystemRequirementForm
+                data={formData as SystemRequirementFormData}
+                onChange={handleFormDataChange}
+                onValidationChange={handleValidationChange}
+              />
+            )}
+            {type === 'test-case' && (
+              <TestCaseForm
+                data={formData as TestCaseFormData}
                 onChange={handleFormDataChange}
                 onValidationChange={handleValidationChange}
               />

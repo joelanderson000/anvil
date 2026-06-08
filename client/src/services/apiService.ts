@@ -51,9 +51,47 @@ export interface Dependency {
   description: string
 }
 
+export interface CustomerRequirement {
+  id: string
+  name: string
+  status: string
+  approval: string
+  priority: string
+  source: string
+  path: string
+  type: 'customer-requirement'
+}
+
+export interface SystemRequirement {
+  id: string
+  name: string
+  status: string
+  approval: string
+  priority: string
+  crId: string
+  verificationMethod: string
+  path: string
+  type: 'system-requirement'
+}
+
+export interface TestCase {
+  id: string
+  name: string
+  status: string
+  approval: string
+  srId: string
+  passFail: string
+  verificationMethod: string
+  path: string
+  type: 'test-case'
+}
+
 export interface CapabilitiesResponse {
   capabilities: Capability[]
   enablers: Enabler[]
+  customerRequirements?: CustomerRequirement[]
+  systemRequirements?: SystemRequirement[]
+  testCases?: TestCase[]
 }
 
 export interface CapabilitiesWithDependenciesResponse extends CapabilitiesResponse {
@@ -429,6 +467,34 @@ export const apiService = {
     } catch (error) {
       console.error('Failed to open file explorer:', error)
       return { success: false, error: `Failed to open file explorer: ${(error as Error).message}` }
+    }
+  },
+
+  async getTemplate(type: string): Promise<{ content: string }> {
+    try {
+      const response = await api.get<{ content: string }>(`/template/${type}`)
+      return response.data
+    } catch (error) {
+      console.error(`Failed to get template for ${type}:`, error)
+      throw new Error(`Failed to load template: ${(error as Error).message}`)
+    }
+  },
+
+  async updateTestCaseResult(
+    id: string,
+    passFail?: string,
+    actualResult?: string
+  ): Promise<ApiResponse> {
+    try {
+      if (!id) throw new Error('Test case ID is required')
+      const response = await api.patch<ApiResponse>(`/test-cases/${id}/result`, {
+        passFail,
+        actualResult
+      })
+      return response.data
+    } catch (error) {
+      console.error(`Failed to update test case result for ${id}:`, error)
+      throw new Error(`Failed to update test case: ${(error as Error).message}`)
     }
   }
 }

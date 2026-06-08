@@ -44,7 +44,40 @@ export const STATUS_VALUES = {
     IN_DRAFT: 'In Draft',
     RETIRED: 'Retired',
     VERIFIED: 'Verified'
+  } as const,
+  CUSTOMER_REQUIREMENT: {
+    IN_DRAFT: 'In Draft',
+    READY_FOR_REVIEW: 'Ready for Review',
+    APPROVED: 'Approved',
+    CLOSED: 'Closed'
+  } as const,
+  SYSTEM_REQUIREMENT: {
+    IN_DRAFT: 'In Draft',
+    READY_FOR_REVIEW: 'Ready for Review',
+    ALLOCATED: 'Allocated',
+    VERIFIED: 'Verified',
+    CLOSED: 'Closed'
+  } as const,
+  TEST_CASE: {
+    IN_DRAFT: 'In Draft',
+    READY_FOR_REVIEW: 'Ready for Review',
+    APPROVED: 'Approved',
+    EXECUTED: 'Executed'
   } as const
+} as const
+
+export const PASS_FAIL_VALUES = {
+  NOT_EXECUTED: 'Not Executed',
+  PASS: 'Pass',
+  FAIL: 'Fail',
+  BLOCKED: 'Blocked'
+} as const
+
+export const VERIFICATION_METHOD_VALUES = {
+  TEST: 'Test',
+  INSPECTION: 'Inspection',
+  ANALYSIS: 'Analysis',
+  DEMONSTRATION: 'Demonstration'
 } as const
 
 export const APPROVAL_VALUES = {
@@ -88,6 +121,11 @@ export const DEFAULT_VALUES = {
 export type CapabilityStatus = typeof STATUS_VALUES.CAPABILITY[keyof typeof STATUS_VALUES.CAPABILITY]
 export type EnablerStatus = typeof STATUS_VALUES.ENABLER[keyof typeof STATUS_VALUES.ENABLER]
 export type RequirementStatus = typeof STATUS_VALUES.REQUIREMENT[keyof typeof STATUS_VALUES.REQUIREMENT]
+export type CustomerRequirementStatus = typeof STATUS_VALUES.CUSTOMER_REQUIREMENT[keyof typeof STATUS_VALUES.CUSTOMER_REQUIREMENT]
+export type SystemRequirementStatus = typeof STATUS_VALUES.SYSTEM_REQUIREMENT[keyof typeof STATUS_VALUES.SYSTEM_REQUIREMENT]
+export type TestCaseStatus = typeof STATUS_VALUES.TEST_CASE[keyof typeof STATUS_VALUES.TEST_CASE]
+export type PassFailValue = typeof PASS_FAIL_VALUES[keyof typeof PASS_FAIL_VALUES]
+export type VerificationMethodValue = typeof VERIFICATION_METHOD_VALUES[keyof typeof VERIFICATION_METHOD_VALUES]
 export type ApprovalValue = typeof APPROVAL_VALUES[keyof typeof APPROVAL_VALUES]
 export type PriorityValue = typeof PRIORITY_VALUES.CAPABILITY_ENABLER[keyof typeof PRIORITY_VALUES.CAPABILITY_ENABLER] | typeof PRIORITY_VALUES.REQUIREMENT[keyof typeof PRIORITY_VALUES.REQUIREMENT]
 export type ReviewValue = typeof REVIEW_VALUES[keyof typeof REVIEW_VALUES]

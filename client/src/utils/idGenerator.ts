@@ -175,3 +175,45 @@ export function generateNonFunctionalRequirementId(existingRequirementIds: strin
 
   return `NFR-${sequentialNum}`
 }
+
+export function generateCustomerRequirementId(existingIds: string[] = []): string {
+  let attempts = 0
+  while (attempts < 100) {
+    const newId = `CR-${generateSemiUniqueNumber()}`
+    if (!idExists(newId, existingIds)) return newId
+    attempts++
+    const start = Date.now()
+    while (Date.now() - start < 1) { /* wait */ }
+  }
+  let sequentialNum = 100000000
+  while (idExists(`CR-${sequentialNum}`, existingIds)) sequentialNum++
+  return `CR-${sequentialNum}`
+}
+
+export function generateSystemRequirementId(existingIds: string[] = []): string {
+  let attempts = 0
+  while (attempts < 100) {
+    const newId = `SR-${generateSemiUniqueNumber()}`
+    if (!idExists(newId, existingIds)) return newId
+    attempts++
+    const start = Date.now()
+    while (Date.now() - start < 1) { /* wait */ }
+  }
+  let sequentialNum = 100000000
+  while (idExists(`SR-${sequentialNum}`, existingIds)) sequentialNum++
+  return `SR-${sequentialNum}`
+}
+
+export function generateTestCaseId(existingIds: string[] = []): string {
+  let attempts = 0
+  while (attempts < 100) {
+    const newId = `TC-${generateSemiUniqueNumber()}`
+    if (!idExists(newId, existingIds)) return newId
+    attempts++
+    const start = Date.now()
+    while (Date.now() - start < 1) { /* wait */ }
+  }
+  let sequentialNum = 100000000
+  while (idExists(`TC-${sequentialNum}`, existingIds)) sequentialNum++
+  return `TC-${sequentialNum}`
+}

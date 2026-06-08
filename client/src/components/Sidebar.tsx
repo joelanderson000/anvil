@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../contexts/AppContext'
-import { FileText, Plus, ArrowLeft, ChevronDown, ChevronRight, Settings, Box, Zap, PencilRuler, Ruler, Microscope, GripHorizontal, Filter, Lock } from 'lucide-react'
+import { FileText, Plus, ArrowLeft, ChevronDown, ChevronRight, Settings, Box, Zap, PencilRuler, Ruler, Microscope, GripHorizontal, Filter, Lock, Users, Cpu, TestTube } from 'lucide-react'
 import { apiService } from '../services/apiService'
 
 interface SidebarExpandedSections {
@@ -52,6 +52,9 @@ export default function Sidebar(): JSX.Element {
   const {
     capabilities,
     enablers,
+    customerRequirements,
+    systemRequirements,
+    testCases,
     selectedCapability,
     setSelectedCapability,
     selectedDocument,
@@ -69,6 +72,9 @@ export default function Sidebar(): JSX.Element {
     capabilities: true,
     enablers: true
   })
+  const [crExpanded, setCrExpanded] = useState<boolean>(true)
+  const [srExpanded, setSrExpanded] = useState<boolean>(true)
+  const [tcExpanded, setTcExpanded] = useState<boolean>(true)
 
   const [expandedComponentGroups, setExpandedComponentGroups] = useState<ExpandedComponentGroups>({})
 
@@ -418,6 +424,82 @@ export default function Sidebar(): JSX.Element {
         </button>
       )}
 
+      {/* Customer Requirements Section */}
+      <div className="flex flex-col min-h-0 mb-1">
+        <div
+          className="flex items-center gap-2 py-3 font-semibold text-xl text-foreground cursor-pointer border-b-2 border-primary mb-3 justify-between uppercase tracking-wide hover:text-foreground/90 bg-card sticky top-0 z-10"
+          onClick={() => setCrExpanded(prev => !prev)}
+        >
+          {crExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          <Users size={14} className="text-muted-foreground" />
+          <span className="flex-1 ml-1">Customer Requirements</span>
+          <button
+            onClick={e => { e.stopPropagation(); navigate('/create/customer-requirement') }}
+            className="flex items-center justify-center w-8 h-8 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors duration-200 shadow-sm border border-primary/20"
+            title="Create Customer Requirement"
+          >
+            <Plus size={18} strokeWidth={2.5} />
+          </button>
+        </div>
+        {crExpanded && (
+          <div className="ml-4 border-l-2 border-primary/20 pl-2 space-y-1 max-h-40 overflow-y-auto">
+            {customerRequirements.length === 0 ? (
+              <div className="text-xs text-muted-foreground py-2 px-3">No customer requirements</div>
+            ) : (
+              customerRequirements.map(cr => (
+                <div
+                  key={(cr as any).path}
+                  className="flex items-center gap-3 py-2 px-3 rounded-md cursor-pointer transition-all duration-150 ease-in-out text-sm text-foreground hover:bg-accent hover:text-accent-foreground"
+                  onClick={() => navigate(`/view/customer-requirement/${(cr as any).path}`)}
+                >
+                  <Users size={14} className="text-muted-foreground shrink-0" />
+                  <span className="flex-1 break-words">{(cr as any).name || (cr as any).id}</span>
+                  {(cr as any).id && <small className="text-xs opacity-60">{(cr as any).id}</small>}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* System Requirements Section */}
+      <div className="flex flex-col min-h-0 mb-1">
+        <div
+          className="flex items-center gap-2 py-3 font-semibold text-xl text-foreground cursor-pointer border-b-2 border-primary mb-3 justify-between uppercase tracking-wide hover:text-foreground/90 bg-card sticky top-0 z-10"
+          onClick={() => setSrExpanded(prev => !prev)}
+        >
+          {srExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          <Cpu size={14} className="text-muted-foreground" />
+          <span className="flex-1 ml-1">System Requirements</span>
+          <button
+            onClick={e => { e.stopPropagation(); navigate('/create/system-requirement') }}
+            className="flex items-center justify-center w-8 h-8 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors duration-200 shadow-sm border border-primary/20"
+            title="Create System Requirement"
+          >
+            <Plus size={18} strokeWidth={2.5} />
+          </button>
+        </div>
+        {srExpanded && (
+          <div className="ml-4 border-l-2 border-primary/20 pl-2 space-y-1 max-h-40 overflow-y-auto">
+            {systemRequirements.length === 0 ? (
+              <div className="text-xs text-muted-foreground py-2 px-3">No system requirements</div>
+            ) : (
+              systemRequirements.map(sr => (
+                <div
+                  key={(sr as any).path}
+                  className="flex items-center gap-3 py-2 px-3 rounded-md cursor-pointer transition-all duration-150 ease-in-out text-sm text-foreground hover:bg-accent hover:text-accent-foreground"
+                  onClick={() => navigate(`/view/system-requirement/${(sr as any).path}`)}
+                >
+                  <Cpu size={14} className="text-muted-foreground shrink-0" />
+                  <span className="flex-1 break-words">{(sr as any).name || (sr as any).id}</span>
+                  {(sr as any).id && <small className="text-xs opacity-60">{(sr as any).id}</small>}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
       <div
         className="flex flex-col"
         style={{ height: `${capabilitiesHeight}%` }}
@@ -607,6 +689,51 @@ export default function Sidebar(): JSX.Element {
           </div>
         )}
       </div>
+      {/* Test Cases Section */}
+      <div className="flex flex-col min-h-0">
+        <div
+          className="flex items-center gap-2 py-3 font-semibold text-xl text-foreground cursor-pointer border-b-2 border-primary mb-3 justify-between uppercase tracking-wide hover:text-foreground/90 bg-card sticky top-0 z-10"
+          onClick={() => setTcExpanded(prev => !prev)}
+        >
+          {tcExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          <TestTube size={14} className="text-muted-foreground" />
+          <span className="flex-1 ml-1">Test Cases</span>
+          <button
+            onClick={e => { e.stopPropagation(); navigate('/create/test-case') }}
+            className="flex items-center justify-center w-8 h-8 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors duration-200 shadow-sm border border-primary/20"
+            title="Create Test Case"
+          >
+            <Plus size={18} strokeWidth={2.5} />
+          </button>
+        </div>
+        {tcExpanded && (
+          <div className="ml-4 border-l-2 border-primary/20 pl-2 space-y-1 max-h-40 overflow-y-auto">
+            {testCases.length === 0 ? (
+              <div className="text-xs text-muted-foreground py-2 px-3">No test cases</div>
+            ) : (
+              testCases.map(tc => {
+                const passFailColor = {
+                  'Pass': 'text-green-500',
+                  'Fail': 'text-red-500',
+                  'Blocked': 'text-yellow-500'
+                }[(tc as any).passFail] || ''
+                return (
+                  <div
+                    key={(tc as any).path}
+                    className="flex items-center gap-3 py-2 px-3 rounded-md cursor-pointer transition-all duration-150 ease-in-out text-sm text-foreground hover:bg-accent hover:text-accent-foreground"
+                    onClick={() => navigate(`/view/test-case/${(tc as any).path}`)}
+                  >
+                    <TestTube size={14} className={`shrink-0 ${passFailColor || 'text-muted-foreground'}`} />
+                    <span className="flex-1 break-words">{(tc as any).name || (tc as any).id}</span>
+                    {(tc as any).id && <small className="text-xs opacity-60">{(tc as any).id}</small>}
+                  </div>
+                )
+              })
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Project NFRs Section */}
       <div className="flex flex-col min-h-0">
         <div

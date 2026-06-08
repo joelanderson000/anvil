@@ -1,5 +1,5 @@
 // Utility functions to parse markdown to form data and vice versa
-import { STATUS_VALUES, APPROVAL_VALUES, PRIORITY_VALUES, REVIEW_VALUES, DEFAULT_VALUES } from './constants'
+import { STATUS_VALUES, APPROVAL_VALUES, PRIORITY_VALUES, REVIEW_VALUES, DEFAULT_VALUES, PASS_FAIL_VALUES, VERIFICATION_METHOD_VALUES } from './constants'
 
 export interface Dependency {
   id: string
@@ -80,10 +80,70 @@ export interface EnablerFormData {
   implementationPlan?: string
 }
 
-export type FormData = CapabilityFormData | EnablerFormData
-export type DocumentType = 'capability' | 'enabler'
+export interface TraceLink {
+  id: string
+  description: string
+}
+
+export interface TestProcedureStep {
+  step: string
+  action: string
+  expectedResult: string
+}
+
+export interface CustomerRequirementFormData {
+  name: string
+  source: string
+  priority: string
+  status: string
+  approval: string
+  id?: string
+  statement?: string
+  rationale?: string
+  acceptanceCriteria?: string
+  derivedSystemRequirements?: TraceLink[]
+}
+
+export interface SystemRequirementFormData {
+  name: string
+  crId: string
+  verificationMethod: string
+  priority: string
+  status: string
+  approval: string
+  id?: string
+  statement?: string
+  rationale?: string
+  verificationCriteria?: string
+  parentCRs?: TraceLink[]
+  allocatedFunctions?: TraceLink[]
+  verificationTestCases?: TraceLink[]
+}
+
+export interface TestCaseFormData {
+  name: string
+  srId: string
+  verificationMethod: string
+  passFail: string
+  status: string
+  approval: string
+  id?: string
+  objective?: string
+  prerequisites?: string
+  testProcedure?: TestProcedureStep[]
+  actualResult?: string
+  passFailDetermination?: string
+  verifiedSRs?: TraceLink[]
+}
+
+export type FormData = CapabilityFormData | EnablerFormData | CustomerRequirementFormData | SystemRequirementFormData | TestCaseFormData
+export type DocumentType = 'capability' | 'enabler' | 'customer-requirement' | 'system-requirement' | 'test-case'
 
 export function parseMarkdownToForm(markdown: string, type: DocumentType): FormData {
+  if (type === 'customer-requirement') return parseCustomerRequirement(markdown)
+  if (type === 'system-requirement') return parseSystemRequirement(markdown)
+  if (type === 'test-case') return parseTestCase(markdown)
+
   const lines = markdown.split('\n')
   const result: any = {
     name: '',
@@ -180,42 +240,232 @@ export function parseMarkdownToForm(markdown: string, type: DocumentType): FormD
   return result
 }
 
+function extractSection(markdown: string, heading: string): string {
+  const lines = markdown.split('\n')
+  const startIdx = lines.findIndex(l => l.trim() === `## ${heading}`)
+  if (startIdx === -1) return ''
+  const result: string[] = []
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    if (lines[i].startsWith('## ')) break
+    result.push(lines[i])
+  }
+  return result.join('\n').trim()
+}
+
+function parseSimpleTable(markdown: string, heading: string): TraceLink[] {
+  const lines = markdown.split('\n')
+  const startIdx = lines.findIndex(l => l.trim() === `## ${heading}`)
+  if (startIdx === -1) return []
+  const result: TraceLink[] = []
+  let inTable = false
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    const line = lines[i]
+    if (line.startsWith('## ')) break
+    if (line.startsWith('|') && !line.includes('---')) {
+      if (!inTable) { inTable = true; continue }
+      const cells = line.split('|').map(c => c.trim()).filter((_, idx, arr) => idx > 0 && idx < arr.length - 1)
+      if (cells.length >= 2 && (cells[0] || cells[1])) {
+        result.push({ id: cells[0], description: cells[1] })
+      }
+    }
+  }
+  return result
+}
+
+function parseMetaField(markdown: string, field: string): string {
+  const match = markdown.match(new RegExp(`^-\\s*\\*\\*${field}\\*\\*:\\s*(.+)$`, 'm'))
+  return match ? match[1].trim() : ''
+}
+
+function parseCustomerRequirement(markdown: string): CustomerRequirementFormData {
+  const titleMatch = markdown.match(/^#\s+(.+)$/m)
+  return {
+    name: parseMetaField(markdown, 'Name') || (titleMatch ? titleMatch[1] : ''),
+    id: parseMetaField(markdown, 'ID') || undefined,
+    source: parseMetaField(markdown, 'Source'),
+    priority: parseMetaField(markdown, 'Priority') || PRIORITY_VALUES.CAPABILITY_ENABLER.HIGH,
+    status: parseMetaField(markdown, 'Status') || STATUS_VALUES.CUSTOMER_REQUIREMENT.IN_DRAFT,
+    approval: parseMetaField(markdown, 'Approval') || APPROVAL_VALUES.NOT_APPROVED,
+    statement: extractSection(markdown, 'Statement'),
+    rationale: extractSection(markdown, 'Rationale'),
+    acceptanceCriteria: extractSection(markdown, 'Acceptance Criteria'),
+    derivedSystemRequirements: parseSimpleTable(markdown, 'Derived System Requirements')
+  }
+}
+
+function parseSystemRequirement(markdown: string): SystemRequirementFormData {
+  const titleMatch = markdown.match(/^#\s+(.+)$/m)
+  return {
+    name: parseMetaField(markdown, 'Name') || (titleMatch ? titleMatch[1] : ''),
+    id: parseMetaField(markdown, 'ID') || undefined,
+    crId: parseMetaField(markdown, 'Customer Requirement ID'),
+    verificationMethod: parseMetaField(markdown, 'Verification Method') || VERIFICATION_METHOD_VALUES.TEST,
+    priority: parseMetaField(markdown, 'Priority') || PRIORITY_VALUES.CAPABILITY_ENABLER.HIGH,
+    status: parseMetaField(markdown, 'Status') || STATUS_VALUES.SYSTEM_REQUIREMENT.IN_DRAFT,
+    approval: parseMetaField(markdown, 'Approval') || APPROVAL_VALUES.NOT_APPROVED,
+    statement: extractSection(markdown, 'Statement'),
+    rationale: extractSection(markdown, 'Rationale'),
+    verificationCriteria: extractSection(markdown, 'Verification Criteria'),
+    parentCRs: parseSimpleTable(markdown, 'Parent Customer Requirements'),
+    allocatedFunctions: parseSimpleTable(markdown, 'Allocated Functions'),
+    verificationTestCases: parseSimpleTable(markdown, 'Verification Test Cases')
+  }
+}
+
+function parseTestProcedureTable(markdown: string): TestProcedureStep[] {
+  const lines = markdown.split('\n')
+  const startIdx = lines.findIndex(l => l.trim() === '## Test Procedure')
+  if (startIdx === -1) return []
+  const result: TestProcedureStep[] = []
+  let inTable = false
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    const line = lines[i]
+    if (line.startsWith('## ')) break
+    if (line.startsWith('|') && !line.includes('---')) {
+      if (!inTable) { inTable = true; continue }
+      const cells = line.split('|').map(c => c.trim()).filter((_, idx, arr) => idx > 0 && idx < arr.length - 1)
+      if (cells.length >= 3 && (cells[0] || cells[1] || cells[2])) {
+        result.push({ step: cells[0], action: cells[1], expectedResult: cells[2] })
+      }
+    }
+  }
+  return result
+}
+
+function parseTestCase(markdown: string): TestCaseFormData {
+  const titleMatch = markdown.match(/^#\s+(.+)$/m)
+  return {
+    name: parseMetaField(markdown, 'Name') || (titleMatch ? titleMatch[1] : ''),
+    id: parseMetaField(markdown, 'ID') || undefined,
+    srId: parseMetaField(markdown, 'System Requirement ID'),
+    verificationMethod: parseMetaField(markdown, 'Verification Method') || VERIFICATION_METHOD_VALUES.TEST,
+    passFail: parseMetaField(markdown, 'Pass/Fail Status') || PASS_FAIL_VALUES.NOT_EXECUTED,
+    status: parseMetaField(markdown, 'Status') || STATUS_VALUES.TEST_CASE.IN_DRAFT,
+    approval: parseMetaField(markdown, 'Approval') || APPROVAL_VALUES.NOT_APPROVED,
+    objective: extractSection(markdown, 'Objective'),
+    prerequisites: extractSection(markdown, 'Prerequisites'),
+    testProcedure: parseTestProcedureTable(markdown),
+    actualResult: extractSection(markdown, 'Actual Result'),
+    passFailDetermination: extractSection(markdown, 'Pass / Fail Determination'),
+    verifiedSRs: parseSimpleTable(markdown, 'Verified System Requirements')
+  }
+}
+
+function convertCRToMarkdown(d: CustomerRequirementFormData): string {
+  let md = `# ${d.name}\n\n## Metadata\n`
+  md += `- **Name**: ${d.name}\n`
+  md += `- **Type**: Customer Requirement\n`
+  if (d.id) md += `- **ID**: ${d.id}\n`
+  md += `- **Source**: ${d.source || ''}\n`
+  md += `- **Owner**: Product Team\n`
+  md += `- **Status**: ${d.status}\n`
+  md += `- **Approval**: ${d.approval}\n`
+  md += `- **Priority**: ${d.priority}\n\n`
+  md += `## Statement\n${d.statement || ''}\n\n`
+  md += `## Rationale\n${d.rationale || ''}\n\n`
+  md += `## Acceptance Criteria\n${d.acceptanceCriteria || ''}\n\n`
+  md += `## Derived System Requirements\n| SR ID | Description |\n|-------|-------------|\n`
+  if (d.derivedSystemRequirements && d.derivedSystemRequirements.length > 0) {
+    d.derivedSystemRequirements.forEach(r => { md += `| ${r.id} | ${r.description} |\n` })
+  } else {
+    md += `| | |\n`
+  }
+  return md
+}
+
+function convertSRToMarkdown(d: SystemRequirementFormData): string {
+  let md = `# ${d.name}\n\n## Metadata\n`
+  md += `- **Name**: ${d.name}\n`
+  md += `- **Type**: System Requirement\n`
+  if (d.id) md += `- **ID**: ${d.id}\n`
+  md += `- **Customer Requirement ID**: ${d.crId || ''}\n`
+  md += `- **Owner**: Product Team\n`
+  md += `- **Status**: ${d.status}\n`
+  md += `- **Approval**: ${d.approval}\n`
+  md += `- **Priority**: ${d.priority}\n`
+  md += `- **Verification Method**: ${d.verificationMethod}\n\n`
+  md += `## Statement\n${d.statement || ''}\n\n`
+  md += `## Rationale\n${d.rationale || ''}\n\n`
+  md += `## Verification Criteria\n${d.verificationCriteria || ''}\n\n`
+  md += `## Parent Customer Requirements\n| CR ID | Description |\n|-------|-------------|\n`
+  if (d.parentCRs && d.parentCRs.length > 0) {
+    d.parentCRs.forEach(r => { md += `| ${r.id} | ${r.description} |\n` })
+  } else { md += `| | |\n` }
+  md += `\n## Allocated Functions\n| FUN ID | Description |\n|--------|-------------|\n`
+  if (d.allocatedFunctions && d.allocatedFunctions.length > 0) {
+    d.allocatedFunctions.forEach(r => { md += `| ${r.id} | ${r.description} |\n` })
+  } else { md += `| | |\n` }
+  md += `\n## Verification Test Cases\n| TC ID | Description | Status |\n|-------|-------------|--------|\n`
+  if (d.verificationTestCases && d.verificationTestCases.length > 0) {
+    d.verificationTestCases.forEach(r => { md += `| ${r.id} | ${r.description} | |\n` })
+  } else { md += `| | | |\n` }
+  return md
+}
+
+function convertTCToMarkdown(d: TestCaseFormData): string {
+  let md = `# ${d.name}\n\n## Metadata\n`
+  md += `- **Name**: ${d.name}\n`
+  md += `- **Type**: Test Case\n`
+  if (d.id) md += `- **ID**: ${d.id}\n`
+  md += `- **System Requirement ID**: ${d.srId || ''}\n`
+  md += `- **Owner**: Product Team\n`
+  md += `- **Status**: ${d.status}\n`
+  md += `- **Approval**: ${d.approval}\n`
+  md += `- **Verification Method**: ${d.verificationMethod}\n`
+  md += `- **Pass/Fail Status**: ${d.passFail}\n\n`
+  md += `## Objective\n${d.objective || ''}\n\n`
+  md += `## Prerequisites\n${d.prerequisites || ''}\n\n`
+  md += `## Test Procedure\n| Step | Action | Expected Result |\n|------|--------|------------------|\n`
+  if (d.testProcedure && d.testProcedure.length > 0) {
+    d.testProcedure.forEach(s => { md += `| ${s.step} | ${s.action} | ${s.expectedResult} |\n` })
+  } else { md += `| 1 | | |\n` }
+  md += `\n## Actual Result\n${d.actualResult || ''}\n\n`
+  md += `## Pass / Fail Determination\n${d.passFailDetermination || ''}\n\n`
+  md += `## Verified System Requirements\n| SR ID | Description |\n|-------|-------------|\n`
+  if (d.verifiedSRs && d.verifiedSRs.length > 0) {
+    d.verifiedSRs.forEach(r => { md += `| ${r.id} | ${r.description} |\n` })
+  } else { md += `| | |\n` }
+  return md
+}
+
 export function convertFormToMarkdown(formData: FormData, type: DocumentType): string {
-  let markdown = `# ${formData.name}\n\n`
+  if (type === 'customer-requirement') return convertCRToMarkdown(formData as CustomerRequirementFormData)
+  if (type === 'system-requirement') return convertSRToMarkdown(formData as SystemRequirementFormData)
+  if (type === 'test-case') return convertTCToMarkdown(formData as TestCaseFormData)
+
+  const capEnbData = formData as CapabilityFormData & EnablerFormData
+  let markdown = `# ${capEnbData.name}\n\n`
 
   // Add metadata
   markdown += `## Metadata\n\n`
-  markdown += `- **Name**: ${formData.name}\n`
+  markdown += `- **Name**: ${capEnbData.name}\n`
   if (type === 'capability') markdown += `- **Type**: Capability\n`
   if (type === 'enabler') markdown += `- **Type**: Enabler\n`
   if (type === 'capability' && (formData as CapabilityFormData).system) markdown += `- **System**: ${(formData as CapabilityFormData).system}\n`
   if (type === 'capability' && (formData as CapabilityFormData).component) markdown += `- **Component**: ${(formData as CapabilityFormData).component}\n`
-  if (formData.id) markdown += `- **ID**: ${formData.id}\n`
-  markdown += `- **Approval**: ${formData.approval}\n`
+  if (capEnbData.id) markdown += `- **ID**: ${capEnbData.id}\n`
+  markdown += `- **Approval**: ${capEnbData.approval}\n`
   if ((formData as EnablerFormData).capabilityId) markdown += `- **Capability ID**: ${(formData as EnablerFormData).capabilityId}\n`
-  markdown += `- **Owner**: ${formData.owner}\n`
-  markdown += `- **Status**: ${formData.status}\n`
-  markdown += `- **Priority**: ${formData.priority}\n`
+  markdown += `- **Owner**: ${capEnbData.owner}\n`
+  markdown += `- **Status**: ${capEnbData.status}\n`
+  markdown += `- **Priority**: ${capEnbData.priority}\n`
 
   // Add review fields for both capabilities and enablers
   if (type === 'capability') {
-    markdown += `- **Analysis Review**: ${formData.analysisReview || 'Required'}\n`
+    markdown += `- **Analysis Review**: ${capEnbData.analysisReview || 'Required'}\n`
   } else if (type === 'enabler') {
-    markdown += `- **Analysis Review**: ${formData.analysisReview || 'Required'}\n`
-    markdown += `- **Code Review**: ${formData.codeReview || 'Not Required'}\n`
+    markdown += `- **Analysis Review**: ${capEnbData.analysisReview || 'Required'}\n`
+    markdown += `- **Code Review**: ${capEnbData.codeReview || 'Not Required'}\n`
   }
 
   markdown += `\n`
 
   // Add Technical Overview section (appears right after metadata for both types)
-  if (formData.purpose) {
-    // Use the purpose field from form if available
-    markdown += `## Technical Overview\n### Purpose\n${formData.purpose}\n\n`
-  } else if (formData.technicalOverview) {
-    // Fall back to preserved technical overview section
-    markdown += formData.technicalOverview + '\n\n'
+  if (capEnbData.purpose) {
+    markdown += `## Technical Overview\n### Purpose\n${capEnbData.purpose}\n\n`
+  } else if (capEnbData.technicalOverview) {
+    markdown += capEnbData.technicalOverview + '\n\n'
   } else {
-    // Add default Technical Overview section if not present
     markdown += `## Technical Overview\n### Purpose\n[What is the purpose?]\n\n`
   }
 

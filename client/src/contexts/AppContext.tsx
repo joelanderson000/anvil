@@ -43,6 +43,36 @@ interface Requirement {
   [key: string]: unknown
 }
 
+interface CustomerRequirement {
+  id?: string
+  name?: string
+  path: string
+  type: string
+  status?: string
+  [key: string]: unknown
+}
+
+interface SystemRequirement {
+  id?: string
+  name?: string
+  path: string
+  type: string
+  status?: string
+  crId?: string
+  [key: string]: unknown
+}
+
+interface TestCase {
+  id?: string
+  name?: string
+  path: string
+  type: string
+  status?: string
+  srId?: string
+  passFail?: string
+  [key: string]: unknown
+}
+
 interface SearchResults {
   capabilities: Capability[]
   enablers: Enabler[]
@@ -85,6 +115,9 @@ interface WebSocketData {
 interface AppState {
   capabilities: Capability[]
   enablers: Enabler[]
+  customerRequirements: CustomerRequirement[]
+  systemRequirements: SystemRequirement[]
+  testCases: TestCase[]
   selectedCapability: Capability | null
   selectedDocument: SelectedDocument | null
   loading: boolean
@@ -100,7 +133,7 @@ interface AppState {
 type AppAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string }
-  | { type: 'SET_DATA'; payload: { capabilities?: Capability[]; enablers?: Enabler[] } }
+  | { type: 'SET_DATA'; payload: { capabilities?: Capability[]; enablers?: Enabler[]; customerRequirements?: CustomerRequirement[]; systemRequirements?: SystemRequirement[]; testCases?: TestCase[] } }
   | { type: 'SET_SELECTED_CAPABILITY'; payload: Capability | null }
   | { type: 'SET_SELECTED_DOCUMENT'; payload: SelectedDocument | null }
   | { type: 'SET_CONFIG'; payload: Config }
@@ -132,6 +165,9 @@ const AppContext = createContext<AppContextValue | undefined>(undefined)
 const initialState: AppState = {
   capabilities: [],
   enablers: [],
+  customerRequirements: [],
+  systemRequirements: [],
+  testCases: [],
   selectedCapability: null,
   selectedDocument: null,
   loading: false,
@@ -161,6 +197,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         capabilities: action.payload.capabilities || [],
         enablers: action.payload.enablers || [],
+        customerRequirements: action.payload.customerRequirements || [],
+        systemRequirements: action.payload.systemRequirements || [],
+        testCases: action.payload.testCases || [],
         loading: false,
         error: null
       }
