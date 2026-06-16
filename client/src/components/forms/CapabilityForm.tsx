@@ -9,13 +9,14 @@ import { apiService } from '../../services/apiService'
 import { SearchableSelect } from '../ui/SearchableSelect'
 import toast from 'react-hot-toast'
 
-import { CapabilityFormData, Dependency, Enabler, generateCapabilityTechnicalSpecificationsTemplate } from '../../utils/markdownUtils'
+import { CapabilityFormData, FunctionFormData, Dependency, Enabler, generateCapabilityTechnicalSpecificationsTemplate, TraceLink } from '../../utils/markdownUtils'
 
 interface CapabilityFormProps {
   data: CapabilityFormData
   onChange: (newData: Partial<CapabilityFormData>) => void
   isNew?: boolean
   currentPath?: string | null
+  docType?: string
 }
 
 interface Workspace {
@@ -39,7 +40,9 @@ interface CapabilityLink {
 }
 
 
-function CapabilityForm({ data, onChange, isNew = false, currentPath = null }: CapabilityFormProps): JSX.Element {
+function CapabilityForm({ data, onChange, isNew = false, currentPath = null, docType }: CapabilityFormProps): JSX.Element {
+  const isFunction = docType === 'function'
+  const funData = data as FunctionFormData
   const { capabilities, enablers } = useApp()
   const navigate = useNavigate()
   const stateListenerRef = useRef(null)
@@ -770,9 +773,86 @@ function CapabilityForm({ data, onChange, isNew = false, currentPath = null }: C
         </div>
       </div>
 
-      {/* Enablers */}
+      {/* Allocated System Requirements — function type only */}
+      {isFunction && (
+        <div className="bg-card rounded-lg border border-border p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-lg font-semibold text-foreground">Allocated System Requirements</h4>
+            <button
+              type="button"
+              onClick={() => onChange({ allocatedSystemRequirements: [...(funData.allocatedSystemRequirements || []), { id: '', description: '' }] } as Partial<FunctionFormData>)}
+              className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80"
+            >
+              <Plus size={12} /> Add
+            </button>
+          </div>
+          <div className="border border-border rounded-md overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">SR ID</th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">Description</th>
+                  <th className="px-2 py-2 w-8"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {(funData.allocatedSystemRequirements || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="px-3 py-3 text-center text-muted-foreground text-xs">No system requirements allocated</td>
+                  </tr>
+                ) : (
+                  (funData.allocatedSystemRequirements || []).map((link: TraceLink, idx: number) => (
+                    <tr key={idx} className="border-t border-border">
+                      <td className="px-2 py-1">
+                        <input
+                          type="text"
+                          value={link.id}
+                          onChange={e => {
+                            const updated = [...(funData.allocatedSystemRequirements || [])]
+                            updated[idx] = { ...updated[idx], id: e.target.value }
+                            onChange({ allocatedSystemRequirements: updated } as Partial<FunctionFormData>)
+                          }}
+                          className="w-full px-2 py-1 bg-transparent border-0 focus:ring-1 focus:ring-primary rounded text-xs"
+                          placeholder="SR-XXXXXXXXX"
+                        />
+                      </td>
+                      <td className="px-2 py-1">
+                        <input
+                          type="text"
+                          value={link.description}
+                          onChange={e => {
+                            const updated = [...(funData.allocatedSystemRequirements || [])]
+                            updated[idx] = { ...updated[idx], description: e.target.value }
+                            onChange({ allocatedSystemRequirements: updated } as Partial<FunctionFormData>)
+                          }}
+                          className="w-full px-2 py-1 bg-transparent border-0 focus:ring-1 focus:ring-primary rounded text-xs"
+                          placeholder="Brief description"
+                        />
+                      </td>
+                      <td className="px-2 py-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = (funData.allocatedSystemRequirements || []).filter((_, i) => i !== idx)
+                            onChange({ allocatedSystemRequirements: updated } as Partial<FunctionFormData>)
+                          }}
+                          className="text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Components */}
       <div className="bg-card rounded-lg border border-border p-6 space-y-4">
-        <h4 className="text-lg font-semibold text-foreground">Enablers</h4>
+        <h4 className="text-lg font-semibold text-foreground">Components</h4>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>

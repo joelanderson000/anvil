@@ -559,6 +559,7 @@ export default function DocumentEditor(): JSX.Element {
                 onChange={handleFormDataChange}
                 isNew={isNew}
                 currentPath={path ? path.substring(0, path.lastIndexOf('/')) : null}
+                docType={type}
               />
             )}
             {(type === 'enabler' || type === 'component') && (

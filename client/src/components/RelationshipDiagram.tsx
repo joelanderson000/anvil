@@ -9,7 +9,7 @@ interface DiagramData {
 }
 
 export default function RelationshipDiagram(): JSX.Element {
-  const { loadDataWithDependencies, loading } = useApp()
+  const { loadDataWithDependencies, loading, capabilities: allCapabilities, customerRequirements, systemRequirements, testCases } = useApp()
   const mermaidRef = useRef<HTMLDivElement>(null)
   const expandedMermaidRef = useRef<HTMLDivElement>(null)
   const [diagramId] = useState<string>(() => `diagram-${Date.now()}`)
@@ -17,6 +17,7 @@ export default function RelationshipDiagram(): JSX.Element {
   const [diagramData, setDiagramData] = useState<DiagramData | null>(null)
   const [diagramLoading, setDiagramLoading] = useState<boolean>(true)
   const [isExpanded, setIsExpanded] = useState<boolean>(false)
+  const [viewMode, setViewMode] = useState<'architecture' | 'traceability'>('architecture')
   const [isPanMode, setIsPanMode] = useState<boolean>(false)
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState<boolean>(false)
@@ -188,8 +189,76 @@ graph TB
     return diagram
   }, [diagramData, diagramLoading])
 
+  // Traceability chain diagram: CR → SR → FUN, TC verifies SR
+  const traceabilitySyntax = useMemo<string | null>(() => {
+    if (loading) return null
+
+    const funs = allCapabilities.filter((c: any) => c.type === 'function' || c.type === 'capability')
+    const crs = customerRequirements
+    const srs = systemRequirements
+    const tcs = testCases
+
+    if (crs.length === 0 && srs.length === 0 && funs.length === 0 && tcs.length === 0) {
+      return `graph LR
+    note["No SE documents found.\\nCreate Customer Requirements\\nto start the traceability chain."]
+    classDef note fill:#f0f9ff,stroke:#0ea5e9,color:#0369a1
+    class note note`
+    }
+
+    const mId = (id: string) => (id || '').replace(/[-]/g, '_')
+    let diagram = 'graph LR\n'
+
+    crs.forEach((cr: any) => {
+      if (!cr.id) return
+      const name = (cr.name || cr.title || cr.id).replace(/"/g, "'").substring(0, 40)
+      diagram += `    ${mId(cr.id)}["${cr.id}\\n${name}"]\n`
+    })
+
+    srs.forEach((sr: any) => {
+      if (!sr.id) return
+      const name = (sr.name || sr.title || sr.id).replace(/"/g, "'").substring(0, 40)
+      diagram += `    ${mId(sr.id)}["${sr.id}\\n${name}"]\n`
+      if (sr.crId) diagram += `    ${mId(sr.crId)} --> ${mId(sr.id)}\n`
+    })
+
+    funs.forEach((fun: any) => {
+      if (!fun.id) return
+      const name = (fun.name || fun.title || fun.id).replace(/"/g, "'").substring(0, 40)
+      diagram += `    ${mId(fun.id)}["${fun.id}\\n${name}"]\n`
+      const srIds: string[] = (fun.allocatedSrIds as string[]) || []
+      srIds.forEach(srId => { diagram += `    ${mId(srId)} --> ${mId(fun.id)}\n` })
+    })
+
+    tcs.forEach((tc: any) => {
+      if (!tc.id) return
+      const name = (tc.name || tc.title || tc.id).replace(/"/g, "'").substring(0, 40)
+      diagram += `    ${mId(tc.id)}(["${tc.id}\\n${name}"])\n`
+      if (tc.srId) diagram += `    ${mId(tc.srId)} -.->|verified by| ${mId(tc.id)}\n`
+    })
+
+    const crIds = crs.filter((c: any) => c.id).map((c: any) => mId(c.id)).join(',')
+    const srIds = srs.filter((s: any) => s.id).map((s: any) => mId(s.id)).join(',')
+    const funIds = funs.filter((f: any) => f.id).map((f: any) => mId(f.id)).join(',')
+    const tcIds = tcs.filter((t: any) => t.id).map((t: any) => mId(t.id)).join(',')
+
+    diagram += `
+    classDef cr fill:#fff7ed,stroke:#c2410c,stroke-width:2px,color:#7c2d12,font-weight:600
+    classDef sr fill:#eff6ff,stroke:#1d4ed8,stroke-width:2px,color:#1e3a8a,font-weight:600
+    classDef fun fill:#f0fdf4,stroke:#15803d,stroke-width:2px,color:#14532d,font-weight:600
+    classDef tc fill:#fdf4ff,stroke:#9333ea,stroke-width:2px,color:#581c87
+`
+    if (crIds) diagram += `    class ${crIds} cr\n`
+    if (srIds) diagram += `    class ${srIds} sr\n`
+    if (funIds) diagram += `    class ${funIds} fun\n`
+    if (tcIds) diagram += `    class ${tcIds} tc\n`
+
+    return diagram
+  }, [loading, allCapabilities, customerRequirements, systemRequirements, testCases])
+
+  const activeSyntax = viewMode === 'traceability' ? traceabilitySyntax : diagramSyntax
+
   useEffect(() => {
-    if (!diagramSyntax || !mermaidRef.current) return
+    if (!activeSyntax || !mermaidRef.current) return
 
     const renderDiagram = async (): Promise<void> => {
       try {
@@ -235,7 +304,7 @@ graph TB
         mermaidRef.current.innerHTML = ''
 
         // Render new diagram
-        const { svg } = await mermaid.render(diagramId, diagramSyntax)
+        const { svg } = await mermaid.render(diagramId, activeSyntax)
         mermaidRef.current.innerHTML = svg
 
         // Add click handlers for navigation and apply pan and zoom transform
@@ -269,7 +338,7 @@ graph TB
         svgElement.removeEventListener('click', handleDiagramClick)
       }
     }
-  }, [diagramSyntax, diagramId, panOffset, zoomLevel, isPanMode, isDragging])
+  }, [activeSyntax, diagramId, panOffset, zoomLevel, isPanMode, isDragging])
 
   const handleDiagramClick = (event: MouseEvent): void => {
     // Find clicked node
@@ -394,7 +463,7 @@ graph TB
 
   // Render diagram in expanded view
   useEffect(() => {
-    if (!diagramSyntax || !expandedMermaidRef.current || !isExpanded) return
+    if (!activeSyntax || !expandedMermaidRef.current || !isExpanded) return
 
     const renderExpandedDiagram = async (): Promise<void> => {
       try {
@@ -440,7 +509,7 @@ graph TB
         expandedMermaidRef.current.innerHTML = ''
 
         // Render new diagram with expanded ID
-        const { svg } = await mermaid.render(expandedDiagramId, diagramSyntax)
+        const { svg } = await mermaid.render(expandedDiagramId, activeSyntax)
         expandedMermaidRef.current.innerHTML = svg
 
         // Add click handlers for navigation and apply pan and zoom transform
@@ -474,7 +543,7 @@ graph TB
         svgElement.removeEventListener('click', handleDiagramClick)
       }
     }
-  }, [diagramSyntax, expandedDiagramId, isExpanded, panOffset, zoomLevel, isPanMode, isDragging])
+  }, [activeSyntax, expandedDiagramId, isExpanded, panOffset, zoomLevel, isPanMode, isDragging])
 
   if (loading || diagramLoading) {
     return (
@@ -495,16 +564,33 @@ graph TB
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h3 className="text-2xl font-semibold text-foreground mb-1">
-            System Architecture{isExpanded ? ' - Expanded View' : ''}
+            {viewMode === 'traceability' ? 'Traceability Chain' : 'System Architecture'}{isExpanded ? ' - Expanded View' : ''}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {capabilities.length === 0
-              ? 'Template showing capability dependencies'
-              : `${capabilities.length} capabilities with dependency relationships`
+            {viewMode === 'traceability'
+              ? `CR → SR → FUN chain with TC verification links (${customerRequirements.length} CR, ${systemRequirements.length} SR, ${allCapabilities.filter((c: any) => c.type === 'function').length} FUN, ${testCases.length} TC)`
+              : (diagramData?.capabilities || []).length === 0
+                ? 'Template showing function dependencies'
+                : `${(diagramData?.capabilities || []).length} functions with dependency relationships`
             }
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* View mode toggle */}
+          <div className="flex rounded-md border border-border overflow-hidden text-sm">
+            <button
+              onClick={() => setViewMode('architecture')}
+              className={`px-3 py-1.5 transition-colors ${viewMode === 'architecture' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}
+            >
+              Architecture
+            </button>
+            <button
+              onClick={() => setViewMode('traceability')}
+              className={`px-3 py-1.5 transition-colors ${viewMode === 'traceability' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}
+            >
+              Traceability
+            </button>
+          </div>
           {/* Reset Controls - Always visible on the left */}
           <button
             onClick={resetZoom}

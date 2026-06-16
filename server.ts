@@ -393,6 +393,10 @@ async function scanDirectory(dirPath: string, baseUrl: string = ''): Promise<Doc
         approval: approval,
         priority: metadata.priority,
         capabilityId: capabilityId,
+        ...(metadata.crId && { crId: metadata.crId }),
+        ...(metadata.srId && { srId: metadata.srId }),
+        ...(metadata.passFail && { passFail: metadata.passFail }),
+        ...(metadata.allocatedSrIds && { allocatedSrIds: metadata.allocatedSrIds }),
         ...(metadata.functionalRequirements && { functionalRequirements: metadata.functionalRequirements }),
         ...(metadata.nonFunctionalRequirements && { nonFunctionalRequirements: metadata.nonFunctionalRequirements })
       };
@@ -577,53 +581,79 @@ async function enhanceDependencyTablesWithNames(html) {
   }
 }
 
-// Function to enhance enabler tables with dynamic data
-async function enhanceEnablerTablesWithDynamicData(html) {
+// Resolve cross-references in HTML tables for all SE document types
+async function enhanceCrossReferences(html) {
   try {
     const configPaths = getConfigPaths(config);
 
-    // Create a map of enabler ID to enabler data for quick lookup
-    const enablerMap = new Map();
+    // Build lookup maps for all document types
+    const cmpMap = new Map<string, any>();
+    const crMap  = new Map<string, any>();
+    const srMap  = new Map<string, any>();
+    const funMap = new Map<string, any>();
+    const tcMap  = new Map<string, any>();
 
-    // Read all enabler files from all project paths to build the map
     for (const projectPath of configPaths.projectPaths) {
-      // Ensure projectPath is a string - handle both legacy string format and new object format
       const pathString = typeof projectPath === 'string' ? projectPath : (projectPath as { path: string }).path;
       const resolvedPath = path.resolve(pathString);
-      if (!await fs.pathExists(resolvedPath)) {
-        continue;
-      }
+      if (!await fs.pathExists(resolvedPath)) continue;
 
       const files = await fs.readdir(resolvedPath);
-      const enablerFiles = files.filter(file =>
-        file.endsWith('-component.md') || file.endsWith('-enabler.md')
-      );
-
-      for (const file of enablerFiles) {
+      for (const file of files) {
+        if (!file.endsWith('.md')) continue;
         try {
           const filePath = path.join(resolvedPath, file);
           const content = await fs.readFile(filePath, 'utf8');
           const metadata = extractMetadata(content);
+          if (!metadata.id) continue;
 
-          if (metadata.id) {
-            const enablerEntry = {
-              id: metadata.id,
-              name: metadata.name || metadata.title || 'Unnamed',
-              status: metadata.status || 'Unknown',
-              approval: metadata.approval || 'Unknown',
-              priority: metadata.priority || 'Unknown'
-            };
+          const base = { id: metadata.id, name: metadata.name || metadata.title || 'Unnamed', status: metadata.status || '' };
 
-            enablerMap.set(metadata.id, enablerEntry);
+          if (file.endsWith('-component.md') || file.endsWith('-enabler.md')) {
+            cmpMap.set(metadata.id, { ...base, approval: metadata.approval || '', priority: metadata.priority || '' });
+          } else if (file.endsWith('-customer-requirement.md')) {
+            crMap.set(metadata.id, base);
+          } else if (file.endsWith('-system-requirement.md')) {
+            srMap.set(metadata.id, base);
+          } else if (file.endsWith('-function.md') || file.endsWith('-capability.md')) {
+            funMap.set(metadata.id, base);
+          } else if (file.endsWith('-test-case.md')) {
+            tcMap.set(metadata.id, { ...base, passFail: metadata.passFail || '' });
           }
         } catch (err) {
-          console.warn(`Error reading enabler file ${file}:`, err.message);
+          console.warn(`Error reading file ${file}:`, err.message);
         }
       }
     }
 
-    // Find and enhance component/enabler tables in the HTML
-    // Look for tables with "Component ID" or "Enabler ID" header
+    // Helper: enhance a 2-column trace-link table (ID | Description) by appending Name+Status
+    function enhanceTraceLinkTable(tableHtml: string, idPattern: RegExp, docMap: Map<string, any>, idLabel: string): string {
+      let result = tableHtml;
+
+      // Add Name/Status columns to header row
+      result = result.replace(
+        new RegExp(`(<th[^>]*>${idLabel}<\\/th>)(\\s*<th[^>]*>Description<\\/th>)`),
+        `$1$2<th>Name</th><th>Status</th>`
+      );
+
+      // Enhance each data row
+      result = result.replace(/<tr[^>]*>[\s\S]*?<\/tr>/g, (rowMatch) => {
+        if (rowMatch.includes('<th>')) return rowMatch; // skip header rows
+        const idMatch = rowMatch.match(idPattern);
+        if (!idMatch) return rowMatch;
+        const docId = idMatch[1];
+        const doc = docMap.get(docId);
+        const nameCell = doc
+          ? `<td>${doc.name}</td><td><span style="font-size:0.8em;opacity:0.8">${doc.status}</span></td>`
+          : `<td style="color:#d32f2f">Not Found</td><td></td>`;
+        // Insert before closing </tr>
+        return rowMatch.replace('</tr>', `${nameCell}</tr>`);
+      });
+
+      return result;
+    }
+
+    // Enhance Component/Enabler tables (existing logic)
     let enhancedHtml = html.replace(
       /<table[\s\S]*?<\/table>/g,
       (tableMatch) => {
@@ -635,15 +665,12 @@ async function enhanceEnablerTablesWithDynamicData(html) {
               if (rowMatch.includes('Component ID') || rowMatch.includes('Enabler ID') || rowMatch.includes('---')) {
                 return rowMatch;
               }
-
               const componentIdMatch = rowMatch.match(/<td[^>]*>((?:CMP|ENB)-\d+)<\/td>/);
               if (componentIdMatch) {
                 const componentId = componentIdMatch[1];
-                const componentData = enablerMap.get(componentId);
-
+                const componentData = cmpMap.get(componentId);
                 if (componentData) {
                   const cellCount = (rowMatch.match(/<td[^>]*>/g) || []).length;
-
                   if (cellCount === 1) {
                     return `<tr>
                       <td>${componentData.id}</td>
@@ -652,8 +679,6 @@ async function enhanceEnablerTablesWithDynamicData(html) {
                       <td><span class="approval-${componentData.approval.toLowerCase().replace(/\s+/g, '-')}">${componentData.approval}</span></td>
                       <td><span class="priority-${componentData.priority.toLowerCase()}">${componentData.priority}</span></td>
                     </tr>`;
-                  } else if (cellCount === 2) {
-                    return rowMatch;
                   }
                 } else {
                   return rowMatch.replace(
@@ -662,7 +687,6 @@ async function enhanceEnablerTablesWithDynamicData(html) {
                   );
                 }
               }
-
               return rowMatch;
             }
           );
@@ -671,22 +695,33 @@ async function enhanceEnablerTablesWithDynamicData(html) {
       }
     );
 
-    // Update table header for component/enabler single-column tables
+    // Update header for single-column CMP tables
     enhancedHtml = enhancedHtml.replace(
       /<tr[^>]*>\s*<th[^>]*>(?:Component ID|Enabler ID)<\/th>\s*<\/tr>/,
-      `<tr>
-        <th>Component ID</th>
-        <th>Name</th>
-        <th>Status</th>
-        <th>Approval</th>
-        <th>Priority</th>
-      </tr>`
+      `<tr><th>Component ID</th><th>Name</th><th>Status</th><th>Approval</th><th>Priority</th></tr>`
     );
+
+    // Enhance traceability tables for SR, CR, FUN, TC IDs
+    const traceEnhancements: Array<{ header: string; pattern: RegExp; map: Map<string, any> }> = [
+      { header: 'SR ID',  pattern: /<td[^>]*>(SR-\d+)<\/td>/,  map: srMap  },
+      { header: 'CR ID',  pattern: /<td[^>]*>(CR-\d+)<\/td>/,  map: crMap  },
+      { header: 'FUN ID', pattern: /<td[^>]*>(FUN-\d+)<\/td>/, map: funMap },
+      { header: 'TC ID',  pattern: /<td[^>]*>(TC-\d+)<\/td>/,  map: tcMap  },
+    ];
+
+    enhancedHtml = enhancedHtml.replace(/<table[\s\S]*?<\/table>/g, (tableMatch) => {
+      for (const { header, pattern, map } of traceEnhancements) {
+        if (tableMatch.includes(`>${header}<`)) {
+          return enhanceTraceLinkTable(tableMatch, pattern, map, header);
+        }
+      }
+      return tableMatch;
+    });
 
     return enhancedHtml;
   } catch (error) {
-    console.warn('Error enhancing enabler tables:', error.message);
-    return html; // Return original HTML if enhancement fails
+    console.warn('Error enhancing cross-references:', error.message);
+    return html;
   }
 }
 
@@ -700,6 +735,35 @@ function extractType(content) {
 function extractCapabilityId(content) {
   const match = content.match(/^-\s*\*\*(?:Function ID|Capability ID)\*\*:\s*([A-Z]+-\d+)/m);
   return match ? match[1].trim() : null;
+}
+
+function extractCrId(content) {
+  const match = content.match(/^-\s*\*\*Customer Requirement ID\*\*:\s*([A-Z]+-\d+)/m);
+  return match ? match[1].trim() : null;
+}
+
+function extractSrId(content) {
+  const match = content.match(/^-\s*\*\*System Requirement ID\*\*:\s*([A-Z]+-\d+)/m);
+  return match ? match[1].trim() : null;
+}
+
+function extractPassFail(content) {
+  const match = content.match(/^-\s*\*\*Pass\/Fail Status\*\*:\s*(.+)$/m);
+  return match ? match[1].trim() : null;
+}
+
+function extractAllocatedSrIds(content: string): string[] {
+  const lines = content.split('\n');
+  const sectionIdx = lines.findIndex(l => l.includes('Allocated System Requirements'));
+  if (sectionIdx === -1) return [];
+  const ids: string[] = [];
+  for (let i = sectionIdx + 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line.startsWith('#')) break;
+    const m = line.match(/\|\s*(SR-\d+)\s*\|/);
+    if (m) ids.push(m[1]);
+  }
+  return ids;
 }
 
 // Extract ID from metadata (for both capabilities and enablers)
@@ -747,13 +811,22 @@ function extractMetadata(content: string): DocumentMetadata {
     priority: extractPriority(content),
     system: extractSystem(content),
     component: extractComponent(content),
-    capabilityId: extractCapabilityId(content)
+    capabilityId: extractCapabilityId(content),
+    crId: extractCrId(content),
+    srId: extractSrId(content),
+    passFail: extractPassFail(content)
   };
 
   // Add requirements for component and enabler types
   if (type === 'component' || type === 'enabler') {
     metadata.functionalRequirements = parseFunctionalRequirements(content);
     metadata.nonFunctionalRequirements = parseNonFunctionalRequirements(content);
+  }
+
+  // Add allocated SR IDs for function types
+  if (type === 'function' || type === 'capability') {
+    const srIds = extractAllocatedSrIds(content);
+    if (srIds.length > 0) metadata.allocatedSrIds = srIds;
   }
 
   return metadata;
@@ -1499,7 +1572,7 @@ app.get('/api/function-template', async (req, res) => {
 // Component template endpoint (replaces enabler-template for new workflow)
 app.get('/api/component-template/:functionId?', async (req, res) => {
   try {
-    const functionId = req.params.functionId;
+    const functionId = (req.params as any).functionId as string | undefined;
     const generatedId = await generateComponentId();
     const placeholderComponent = {
       name: '[Component Name]',
@@ -2091,8 +2164,8 @@ app.get('/api/file/*', async (req, res) => {
     // Enhance dependency tables with capability names
     html = await enhanceDependencyTablesWithNames(html);
 
-    // Enhance enabler tables with dynamic data
-    html = await enhanceEnablerTablesWithDynamicData(html);
+    // Enhance cross-references in all traceability tables
+    html = await enhanceCrossReferences(html);
     
     // Get all file paths for relative path calculation
     const allItems = await scanProjectPaths(configPaths.projectPaths);

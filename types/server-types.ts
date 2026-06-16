@@ -57,7 +57,7 @@ export interface ConfigPaths {
 }
 
 // Document types
-export type DocumentType = 'capability' | 'enabler' | 'document' | 'template';
+export type DocumentType = 'capability' | 'enabler' | 'function' | 'component' | 'customer-requirement' | 'system-requirement' | 'test-case' | 'document' | 'template';
 export type DocumentStatus = 'In Draft' | 'Ready for Analysis' | 'In Analysis' | 'Ready for Design' |
   'In Design' | 'Ready for Implementation' | 'In Development' | 'Ready for Testing' | 'In Testing' | 'Deployed';
 export type ApprovalStatus = 'Not Approved' | 'Approved' | 'Rejected';
@@ -69,12 +69,16 @@ export interface DocumentMetadata {
   title?: string;
   description?: string;
   type?: string;
-  status?: DocumentStatus;
-  approval?: ApprovalStatus;
-  priority?: Priority;
+  status?: string;
+  approval?: string;
+  priority?: string;
   system?: string;
   component?: string;
   capabilityId?: string;
+  crId?: string;
+  srId?: string;
+  passFail?: string;
+  allocatedSrIds?: string[];
   functionalRequirements?: any[];
   nonFunctionalRequirements?: any[];
 }
@@ -88,11 +92,15 @@ export interface DocumentItem {
   projectPath?: string;
   id?: string;
   capabilityId?: string;
+  crId?: string;
+  srId?: string;
+  allocatedSrIds?: string[];
   system?: string;
   component?: string;
   status?: string;
   approval?: string;
   priority?: string;
+  passFail?: string;
   fullPath?: string;
   upstreamDependencies?: Dependency[];
   downstreamDependencies?: Dependency[];
