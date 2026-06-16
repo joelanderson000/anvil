@@ -3445,73 +3445,36 @@ async function findCapabilityDirectory(capabilityId) {
   }
 }
 
-async function extractEnablerTemplateFromSoftwarePlan() {
-  try {
-    console.log('[ENABLER-TEMPLATE] Starting template extraction from SOFTWARE_DEVELOPMENT_PLAN.md');
-
-    // ALWAYS use the SOFTWARE_DEVELOPMENT_PLAN.md file relative to server working directory
-    const swPlanPath = path.join(process.cwd(), 'SOFTWARE_DEVELOPMENT_PLAN.md');
-    console.log('[ENABLER-TEMPLATE] Using SOFTWARE_DEVELOPMENT_PLAN.md file relative to server:', swPlanPath);
-
-    if (await fs.pathExists(swPlanPath)) {
-      const swPlanContent = await fs.readFile(swPlanPath, 'utf8');
-
-      const enablerTemplateStart = swPlanContent.indexOf('### Enabler Template Structure:');
-      if (enablerTemplateStart !== -1) {
-        const startMarker = swPlanContent.indexOf('<!-- START ENABLER TEMPLATE -->', enablerTemplateStart);
-        if (startMarker !== -1) {
-          const endMarker = swPlanContent.indexOf('<!-- END ENABLER TEMPLATE -->', startMarker);
-          if (endMarker !== -1) {
-            const templateStart = swPlanContent.indexOf('\n', startMarker) + 1;
-            const templateEnd = endMarker;
-            const templateContent = swPlanContent.substring(templateStart, templateEnd);
-            console.log('[ENABLER-TEMPLATE] Successfully extracted template from SOFTWARE_DEVELOPMENT_PLAN.md');
-            return templateContent;
-          }
-        }
-      }
+async function extractTemplateFromSoftwarePlan(markerName: string): Promise<string> {
+  const swPlanPath = path.join(process.cwd(), 'SOFTWARE_DEVELOPMENT_PLAN.md');
+  if (!await fs.pathExists(swPlanPath)) throw new Error('SOFTWARE_DEVELOPMENT_PLAN.md not found');
+  const content = await fs.readFile(swPlanPath, 'utf8');
+  // Try new-style markers first (e.g., <!-- START FUNCTION TEMPLATE -->)
+  const startTag = `<!-- START ${markerName} TEMPLATE -->`;
+  const endTag   = `<!-- END ${markerName} TEMPLATE -->`;
+  const startIdx = content.indexOf(startTag);
+  if (startIdx !== -1) {
+    const endIdx = content.indexOf(endTag, startIdx);
+    if (endIdx !== -1) {
+      const bodyStart = content.indexOf('\n', startIdx) + 1;
+      return content.substring(bodyStart, endIdx);
     }
-
-    console.warn('[ENABLER-TEMPLATE] SOFTWARE_DEVELOPMENT_PLAN.md not found or does not contain enabler template');
-    throw new Error('SOFTWARE_DEVELOPMENT_PLAN.md not found or does not contain enabler template');
-
-  } catch (error) {
-    console.error('[ENABLER-TEMPLATE] Error extracting template from SOFTWARE_DEVELOPMENT_PLAN.md:', error);
-    throw error;
   }
+  throw new Error(`Template marker '${markerName}' not found in SOFTWARE_DEVELOPMENT_PLAN.md`);
+}
+
+async function extractEnablerTemplateFromSoftwarePlan() {
+  // Try new COMPONENT marker first, fall back to legacy ENABLER marker
+  try { return await extractTemplateFromSoftwarePlan('COMPONENT'); } catch (_) {}
+  try { return await extractTemplateFromSoftwarePlan('ENABLER'); } catch (_) {}
+  throw new Error('No component/enabler template found in SOFTWARE_DEVELOPMENT_PLAN.md');
 }
 
 async function extractCapabilityTemplateFromSoftwarePlan() {
-  try {
-    // ALWAYS use the SOFTWARE_DEVELOPMENT_PLAN.md file relative to server working directory
-    const swPlanPath = path.join(process.cwd(), 'SOFTWARE_DEVELOPMENT_PLAN.md');
-    console.log('[CAPABILITY-TEMPLATE] Using SOFTWARE_DEVELOPMENT_PLAN.md file relative to server:', swPlanPath);
-
-    if (await fs.pathExists(swPlanPath)) {
-      const swPlanContent = await fs.readFile(swPlanPath, 'utf8');
-
-      const capabilityTemplateStart = swPlanContent.indexOf('### Capability Template Structure:');
-      if (capabilityTemplateStart !== -1) {
-        const startMarker = swPlanContent.indexOf('<!-- START CAPABILITY TEMPLATE -->', capabilityTemplateStart);
-        if (startMarker !== -1) {
-          const endMarker = swPlanContent.indexOf('<!-- END CAPABILITY TEMPLATE -->', startMarker);
-          if (endMarker !== -1) {
-            const templateStart = swPlanContent.indexOf('\n', startMarker) + 1;
-            const templateEnd = endMarker;
-            const templateContent = swPlanContent.substring(templateStart, templateEnd);
-            console.log('[CAPABILITY-TEMPLATE] Successfully extracted template from SOFTWARE_DEVELOPMENT_PLAN.md');
-            return templateContent;
-          }
-        }
-      }
-    }
-
-    throw new Error('SOFTWARE_DEVELOPMENT_PLAN.md not found or does not contain capability template');
-
-  } catch (error) {
-    console.error('[CAPABILITY-TEMPLATE] Error extracting template from SOFTWARE_DEVELOPMENT_PLAN.md:', error);
-    throw error;
-  }
+  // Try new FUNCTION marker first, fall back to legacy CAPABILITY marker
+  try { return await extractTemplateFromSoftwarePlan('FUNCTION'); } catch (_) {}
+  try { return await extractTemplateFromSoftwarePlan('CAPABILITY'); } catch (_) {}
+  throw new Error('No function/capability template found in SOFTWARE_DEVELOPMENT_PLAN.md');
 }
 
 async function generateCapabilityContentFromTemplate(capability) {
@@ -3522,48 +3485,39 @@ async function generateCapabilityContentFromTemplate(capability) {
 
     const currentDate = new Date().toISOString().split('T')[0];
 
-    // Define replacement map for safer template processing
-    const replacements = {
-      // Basic placeholders
-      '\\[Capability Name\\]': capability.name || '[Capability Name]',
-      'CAP-XXXXXX': capability.id || 'CAP-XXXXXX',
+    // Define replacement map — handles both old Capability and new Function placeholder names
+    const name = capability.name || '[Function Name]';
+    const id   = capability.id   || 'FUN-XXXXXXXXX';
+    const owner = config.defaults?.owner || 'Product Team';
+    const analysisReview = config.defaults?.analysisReview || 'Required';
+    const replacements: Record<string, string> = {
+      // New Function template placeholders
+      '\\[Function Name\\]': name,
+      'FUN-XXXXXXXXX': id,
+      '\\[What functional behaviour does this provide\\?.*?\\]': capability.description || '[What functional behaviour does this provide?]',
+      '\\[Owner\\]': owner,
+      // Legacy Capability template placeholders
+      '\\[Capability Name\\]': name,
+      'CAP-XXXXXX': id,
+      '\\[Business Function Name\\]': name,
+      '\\[Clear business value statement explaining what business problem this solves\\]': capability.description || '[Clear business value statement]',
+      '\\[Team/Person\\]': owner,
+      '\\[Current State\\]': capability.status || 'In Draft',
+      '\\[High/Medium/Low\\]': capability.priority || 'High',
+      '\\[Required/Not Required\\]': analysisReview,
       'YYYY-MM-DD': currentDate,
       'X\\.Y': '1.0',
-      '\\[Clear business value statement explaining what business problem this solves\\]': capability.description || '[Clear business value statement explaining what business problem this solves]',
+    };
+    // Title line
+    templateContent = templateContent.replace(/^# \[(?:Function|Capability) Name\]/m, `# ${name}`);
 
-      // Title replacement
-      '^# \\[Capability Name\\]': `# ${capability.name || '[Capability Name]'}`,
-
-      // Metadata section replacements
-      '- \\*\\*Name\\*\\*: \\[Business Function Name\\]': `- **Name**: ${capability.name || '[Business Function Name]'}`,
-      '- \\*\\*ID\\*\\*: CAP-XXXXXX': `- **ID**: ${capability.id || 'CAP-XXXXXX'}`,
-      '- \\*\\*Status\\*\\*: \\[Current State\\]': `- **Status**: ${capability.status || 'In Draft'}`,
-      '- \\*\\*Approval\\*\\*: Not Approved': `- **Approval**: ${capability.approval || 'Not Approved'}`,
-      '- \\*\\*Priority\\*\\*: \\[High/Medium/Low\\]': `- **Priority**: ${capability.priority || 'High'}`,
-      '- \\*\\*Analysis Review\\*\\*: \\[Required/Not Required\\]': `- **Analysis Review**: ${config.defaults?.analysisReview || 'Required'}`,
-      '- \\*\\*Owner\\*\\*: \\[Team/Person\\]': `- **Owner**: ${config.defaults?.owner || 'Product Team'}`,
-      '- \\*\\*Created Date\\*\\*: YYYY-MM-DD': `- **Created Date**: ${currentDate}`,
-      '- \\*\\*Last Updated\\*\\*: YYYY-MM-DD': `- **Last Updated**: ${currentDate}`,
-      '- \\*\\*Version\\*\\*: X\\.Y': `- **Version**: ${version.version}`
-    }
-
-    // Apply replacements with validation
+    // Apply replacements
     try {
       for (const [pattern, replacement] of Object.entries(replacements)) {
-        const regex = new RegExp(pattern, pattern.startsWith('^') ? 'm' : 'g')
-        templateContent = templateContent.replace(regex, replacement)
-      }
-
-      // Validate that critical fields were replaced
-      if (capability.name && templateContent.includes('[Capability Name]')) {
-        console.warn('[TEMPLATE] Warning: Some [Capability Name] placeholders may not have been replaced')
-      }
-      if (capability.id && templateContent.includes('CAP-XXXXXX')) {
-        console.warn('[TEMPLATE] Warning: Some CAP-XXXXXX placeholders may not have been replaced')
+        templateContent = templateContent.replace(new RegExp(pattern, 'g'), replacement);
       }
     } catch (replacementError) {
-      console.error('[TEMPLATE] Error during template replacement:', replacementError)
-      // Continue with partially replaced template rather than failing completely
+      console.error('[TEMPLATE] Error during template replacement:', replacementError);
     }
 
     console.log('[CAPABILITY-TEMPLATE] Template generation completed successfully')
@@ -3619,51 +3573,35 @@ async function generateEnablerContentFromTemplate(enabler, capabilityId) {
     
     const currentDate = new Date().toISOString().split('T')[0];
     
-    // Define replacement map for safer template processing
-    const replacements = {
-      // Basic placeholders
-      '\\[Enabler Name\\]': enabler.name || '[Enabler Name]',
-      'ENB-XXXXXX': enabler.id || 'ENB-XXXXXX',
-      'CAP-XXXXXX': capabilityId || 'CAP-XXXXXX',
+    // Define replacement map — handles both new Component and legacy Enabler placeholder names
+    const name = enabler.name || '[Component Name]';
+    const id   = enabler.id   || 'CMP-XXXXXXXXX';
+    const parentId = capabilityId || 'FUN-XXXXXXXXX';
+    const replacements: Record<string, string> = {
+      // New Component template placeholders
+      '\\[Component Name\\]': name,
+      'CMP-XXXXXXXXX': id,
+      'FUN-XXXXXXXXX': parentId,
+      '\\[What is the purpose of this component\\?\\]': enabler.description || '[What is the purpose of this component?]',
+      // Legacy Enabler template placeholders
+      '\\[Enabler Name\\]': name,
+      'ENB-XXXXXX': id,
+      'CAP-XXXXXX': parentId,
+      '\\[What is the purpose\\?\\]': enabler.description || '[What is the purpose?]',
+      '\\[High/Medium/Low\\]': enabler.priority || 'High',
       'YYYY-MM-DD': currentDate,
       'X\\.Y': '1.0',
-      '\\[What is the purpose\\?\\]': enabler.description || '[What is the purpose?]',
-      
-      // Title replacement
-      '^# \\[Enabler Name\\]': `# ${enabler.name || '[Enabler Name]'}`,
-      
-      // Metadata section replacements
-      '- \\*\\*Name\\*\\*: \\[Enabler Name\\]': `- **Name**: ${enabler.name || '[Enabler Name]'}`,
-      '- \\*\\*ID\\*\\*: ENB-XXXXXX': `- **ID**: ${enabler.id || 'ENB-XXXXXX'}`,
-      '- \\*\\*Capability ID\\*\\*: CAP-XXXXXX': `- **Capability ID**: ${capabilityId || 'CAP-XXXXXX'}`,
-      '- \\*\\*Status\\*\\*: In Draft': `- **Status**: ${enabler.status || 'In Draft'}`,
-      '- \\*\\*Approval\\*\\*: Not Approved': `- **Approval**: ${enabler.approval || 'Not Approved'}`,
-      '- \\*\\*Priority\\*\\*: High': `- **Priority**: ${enabler.priority || 'High'}`,
-      '- \\*\\*Analysis Review\\*\\*: Required': `- **Analysis Review**: ${config.defaults?.analysisReview || 'Required'}`,
-      '- \\*\\*Design Review\\*\\*: Required': `- **Design Review**: ${config.defaults?.designReview || 'Required'}`,
-      '- \\*\\*Code Review\\*\\*: Not Required': `- **Code Review**: ${config.defaults?.codeReview || 'Not Required'}`,
-      '- \\*\\*Created Date\\*\\*: YYYY-MM-DD': `- **Created Date**: ${currentDate}`,
-      '- \\*\\*Last Updated\\*\\*: YYYY-MM-DD': `- **Last Updated**: ${currentDate}`,
-      '- \\*\\*Version\\*\\*: X\\.Y': `- **Version**: ${version.version}`
-    }
-    
-    // Apply replacements with validation
+    };
+    // Title line
+    templateContent = templateContent.replace(/^# \[(?:Component|Enabler) Name\]/m, `# ${name}`);
+
+    // Apply replacements
     try {
       for (const [pattern, replacement] of Object.entries(replacements)) {
-        const regex = new RegExp(pattern, pattern.startsWith('^') ? 'm' : 'g')
-        templateContent = templateContent.replace(regex, replacement)
-      }
-      
-      // Validate that critical fields were replaced
-      if (enabler.name && templateContent.includes('[Enabler Name]')) {
-        console.warn('[TEMPLATE] Warning: Some [Enabler Name] placeholders may not have been replaced')
-      }
-      if (enabler.id && templateContent.includes('ENB-XXXXXX')) {
-        console.warn('[TEMPLATE] Warning: Some ENB-XXXXXX placeholders may not have been replaced')
+        templateContent = templateContent.replace(new RegExp(pattern, 'g'), replacement);
       }
     } catch (replacementError) {
-      console.error('[TEMPLATE] Error during template replacement:', replacementError)
-      // Continue with partially replaced template rather than failing completely
+      console.error('[TEMPLATE] Error during template replacement:', replacementError);
     }
 
     // Remove Development Plan section from enabler template
